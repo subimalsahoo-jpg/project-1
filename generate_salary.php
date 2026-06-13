@@ -487,6 +487,8 @@ add_missing_column($conn, 'employee_salary_records', 'total_late_hours', "DECIMA
 add_missing_column($conn, 'employee_salary_records', 'late_amount', "DECIMAL(10,2) DEFAULT 0");
 add_missing_column($conn, 'employee_salary_records', 'advance_id', "INT DEFAULT NULL");
 add_missing_column($conn, 'employee_salary_records', 'advance_balance_after', "DECIMAL(12,2) DEFAULT 0");
+add_missing_column($conn, 'employee_salary_records', 'fixed_salary', "DECIMAL(10,2) DEFAULT 0");
+add_missing_column($conn, 'employees', 'fixed_salary', "DECIMAL(10,2) DEFAULT 0");
 
 ensure_index($conn, 'attendance', 'idx_att_user_date', ['user_no', 'attendance_date']);
 ensure_index($conn, 'attendance', 'idx_att_employee_date', ['employee_id', 'attendance_date']);
@@ -496,6 +498,7 @@ ensure_index($conn, 'vacations', 'idx_vac_user_dates', ['user_no', 'from_date', 
 ensure_index($conn, 'holidays', 'idx_holiday_date', ['holiday_date']);
 
 $salary_columns = table_columns($conn, 'employee_salary_records');
+$employee_columns = table_columns($conn, 'employees');
 
 $active_condition = "1=1";
 $active_condition_join = "1=1";
@@ -710,6 +713,7 @@ $employee_food_won_select = has_col($employee_columns, 'food_allowance_won')
 $employee_basic_select = has_col($employee_columns, 'basic_salary') ? "e.basic_salary" : "0";
 $employee_allowance_select = has_col($employee_columns, 'allowance') ? "e.allowance" : "0";
 $employee_att_allowance_select = has_col($employee_columns, 'att_allowance') ? "e.att_allowance" : (has_col($employee_columns, 'attendance_allowance') ? "e.attendance_allowance" : "0");
+$employee_fixed_salary_select = has_col($employee_columns, 'fixed_salary') ? "e.fixed_salary" : "0";
 $employee_advance_select = "0";
 $employee_insurance_select = has_col($employee_columns, 'insurance_amount') ? "e.insurance_amount" : "0";
 $employee_other_deduction_select = has_col($employee_columns, 'other_deduction') ? "e.other_deduction" : "0";
@@ -763,6 +767,7 @@ SELECT
     COALESCE(s.allowance, ss.allowance, $employee_allowance_select, 0) AS allowance,
     $employee_att_allowance_select AS employee_base_att_allowance,
     COALESCE(NULLIF($employee_att_allowance_select, 0), NULLIF(ss.att_allowance, 0), NULLIF(s.att_allowance, 0), 0) AS att_allowance,
+    COALESCE(NULLIF(s.fixed_salary, 0), NULLIF(ss.fixed_salary, 0), NULLIF($employee_fixed_salary_select, 0), 0) AS fixed_salary,
     COALESCE(s.food_allowance_company, ss.food_allowance_company, $employee_food_company_expr, 0) AS food_allowance_company,
     COALESCE(s.food_allowance_won, ss.food_allowance_won, $employee_food_won_expr, 0) AS food_allowance_won,
     COALESCE(s.food_allowance, ss.food_allowance, $employee_food_company_expr, 0) AS food_allowance,
@@ -1352,6 +1357,8 @@ while ($emp = mysqli_fetch_assoc($result)) {
 
     $basic_salary = (float)($emp['basic_salary'] ?? 0);
     $allowance = (float)($emp['allowance'] ?? 0);
+    $fixed_salary = (float)($emp['fixed_salary'] ?? 0);
+    $is_fixed = $fixed_salary > 0;
     $att_allowance = (float)($emp['att_allowance'] ?? 0);
     $employee_base_att_allowance = (float)($emp['employee_base_att_allowance'] ?? 0);
     if ($employee_base_att_allowance > 0) {
@@ -1447,7 +1454,30 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $att_allowance = 0;
     }
 
-    if ($no_working_days) {
+    if ($is_fixed) {
+        // Fixed salary: flat monthly amount, independent of attendance.
+        // No proration, no OT, no late, no attendance-allowance removal.
+        // Deductions (insurance, advance, other) still apply.
+        $no_working_days = false;
+        $salary_earned = $fixed_salary;
+        $allowance_earned = 0;
+        $att_allowance = 0;
+        $late_att_allowance_removed = 0;
+        $regular_ot_hours = 0;
+        $regular_ot_amount = 0;
+        $ot_hours = 0;
+        $after6pm_ot_amount = 0;
+        $extra_ot_hours = 0;
+        $extra_ot_amount = 0;
+        $sunday_ot_hours = 0;
+        $ot_amount = 0;
+        $total_late_hours = 0;
+        $late_amount = 0;
+        $total_salary = $fixed_salary;
+        $gross_total = max(0, $total_salary + $gross_food_allowance);
+        $total_deduction = $insurance + $advance + $other_deduction;
+        $net_payable = max(0, $gross_total - $total_deduction + $net_food_adjustment);
+    } elseif ($no_working_days) {
         $salary_earned = 0;
         $allowance_earned = 0;
         $regular_ot_amount = 0;
@@ -1546,6 +1576,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
     if ($should_generate_employee) {
         $sets = [];
         add_set($conn, $salary_columns, 'att_allowance', $att_allowance, $sets);
+        add_set($conn, $salary_columns, 'fixed_salary', $fixed_salary, $sets);
         add_set($conn, $salary_columns, 'ot', $ot_hours, $sets);
         add_set($conn, $salary_columns, 'regular_ot_hours', $regular_ot_hours, $sets);
         add_set($conn, $salary_columns, 'regular_ot_amount', $regular_ot_amount, $sets);

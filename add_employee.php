@@ -140,12 +140,18 @@ function salary_numbers_from_post() {
     $ot            = num_val('ot');               // OT amount (calculated)
     $food_company  = num_val('food_allowance_company');
     $food_won      = num_val('food_allowance_won');
+    $fixed_salary  = num_val('fixed_salary');     // flat monthly salary (overrides attendance-based pay)
     $advance       = 0;
     $insurance     = num_val('insurance_amount');
     $other         = num_val('other_deduction');
 
-    // Gross = all earnings including food_won (employee keeps this)
-    $gross         = $basic_salary + $allowance + $att_allowance + $ot + $food_won + $food_company;
+    // Fixed salary employees: flat amount + food, no basic/allowance/att/OT.
+    // Otherwise gross = all earnings including food_won (employee keeps this)
+    if ($fixed_salary > 0) {
+        $gross = $fixed_salary + $food_won + $food_company;
+    } else {
+        $gross = $basic_salary + $allowance + $att_allowance + $ot + $food_won + $food_company;
+    }
     // Deductions
     $total_deduction = $advance + $insurance + $other;
     $net_salary      = $gross - $total_deduction;
@@ -155,6 +161,7 @@ function salary_numbers_from_post() {
         'allowance'             => $allowance,
         'att_allowance'         => $att_allowance,
         'ot'                    => $ot,
+        'fixed_salary'          => $fixed_salary,
         'food_allowance_company'=> $food_company,
         'food_allowance_won'    => $food_won,
         'food_allowance'        => $food_company + $food_won,
@@ -344,6 +351,7 @@ $required_employee_columns = [
     'insurance_issuing_date' => "DATE NULL",
     'insurance_expiry_date'  => "DATE NULL",
     'salary_by'              => "VARCHAR(20) DEFAULT ''",
+    'fixed_salary'           => "DECIMAL(10,2) DEFAULT 0",
 ];
 foreach ($required_employee_columns as $col_name => $definition) {
     $check_col = mysqli_query($conn, "SHOW COLUMNS FROM employees LIKE '" . esc($conn, $col_name) . "'");
@@ -364,6 +372,7 @@ $required_salary_columns = [
     'gross_salary'           => "DECIMAL(10,2) DEFAULT 0",
     'total_deduction'        => "DECIMAL(10,2) DEFAULT 0",
     'net_salary'             => "DECIMAL(10,2) DEFAULT 0",
+    'fixed_salary'           => "DECIMAL(10,2) DEFAULT 0",
 ];
 foreach ($required_salary_columns as $col_name => $definition) {
     $check_col = mysqli_query($conn, "SHOW COLUMNS FROM employee_salary_records LIKE '" . esc($conn, $col_name) . "'");
@@ -534,6 +543,7 @@ $insurance_value         = (float)first_val($search_employee, ['insurance_amount
 $other_deduction_value   = (float)first_val($search_employee, ['other_deduction'], 0);
 $food_company_value      = (float)first_val($search_employee, ['food_allowance_company', 'food_allowance'], 0);
 $food_won_value          = (float)first_val($search_employee, ['food_allowance_won'], 0);
+$fixed_salary_value      = (float)first_val($search_employee, ['fixed_salary'], 0);
 
 // OT from overtime_records for the selected month
 $monthly_ot_hours  = 0;
@@ -556,8 +566,13 @@ if ($search_employee && !empty($search_employee['user_no'])) {
 }
 
 // FIX: gross must match JS logic — food_company IS part of gross (employee receives full)
-$gross_salary_value = $basic_salary_value + $allowance_value + $att_allowance_value
-                    + $monthly_ot_amount + $food_won_value + $food_company_value;
+// Fixed salary employees: flat amount + food only (no basic/allowance/att/OT)
+if ($fixed_salary_value > 0) {
+    $gross_salary_value = $fixed_salary_value + $food_won_value + $food_company_value;
+} else {
+    $gross_salary_value = $basic_salary_value + $allowance_value + $att_allowance_value
+                        + $monthly_ot_amount + $food_won_value + $food_company_value;
+}
 $total_deduction_value = $insurance_value + $other_deduction_value;
 $net_salary_value      = $gross_salary_value - $total_deduction_value;
 ?>
@@ -1081,6 +1096,12 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
         </div>
 
         <div class="form-group">
+            <label>Fixed Salary (AED) <small style="color:#64748b;font-weight:400;">— if &gt; 0, flat monthly pay (no attendance/OT)</small></label>
+            <input type="number" step="0.01" min="0" name="fixed_salary" id="fixed_salary"
+                   value="<?php echo htmlspecialchars(number_format($fixed_salary_value, 2, '.', '')); ?>">
+        </div>
+
+        <div class="form-group">
             <label>OT Hours (auto from records)</label>
             <input type="number" step="0.01" name="ot_hours" id="ot_hours"
                    value="<?php echo htmlspecialchars(number_format($monthly_ot_hours, 2, '.', '')); ?>" readonly>
@@ -1223,6 +1244,7 @@ function calculateNetSalary() {
     var otHours     = numberValue('ot_hours');
     var foodWon     = numberValue('food_allowance_won');
     var foodCompany = numberValue('food_allowance_company');
+    var fixedSalary = numberValue('fixed_salary');
 
     // OT amount = (basic / 30 / 8) * 1.25 * hours
     var otAmount = basic > 0 ? ((basic / 30 / 8) * 1.25 * otHours) : 0;
@@ -1232,8 +1254,14 @@ function calculateNetSalary() {
     var otField = document.getElementById('ot');
     if (otField) otField.value = otAmount.toFixed(2);
 
-    // FIX: gross = all salary components including both food types
-    var gross      = basic + allowance + attAllow + otAmount + foodWon + foodCompany;
+    // Fixed salary employees: flat amount + food only (no basic/allowance/att/OT).
+    // Otherwise gross = all salary components including both food types
+    var gross;
+    if (fixedSalary > 0) {
+        gross = fixedSalary + foodWon + foodCompany;
+    } else {
+        gross = basic + allowance + attAllow + otAmount + foodWon + foodCompany;
+    }
     var deductions = numberValue('insurance_amount')
                    + numberValue('other_deduction');
     var net = gross - deductions;
@@ -1246,7 +1274,7 @@ function calculateNetSalary() {
 
 // Attach listeners
 [
-    'basic_salary', 'allowance', 'att_allowance',
+    'basic_salary', 'allowance', 'att_allowance', 'fixed_salary',
     'food_allowance_company', 'food_allowance_won',
     'insurance_amount', 'other_deduction'
 ].forEach(function(id) {
