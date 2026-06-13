@@ -1455,11 +1455,12 @@ while ($emp = mysqli_fetch_assoc($result)) {
     }
 
     if ($is_fixed) {
-        // Fixed salary: flat monthly amount, independent of attendance.
-        // No proration, no OT, no late, no attendance-allowance removal.
-        // Deductions (insurance, advance, other) still apply.
-        $no_working_days = false;
-        $salary_earned = $fixed_salary;
+        // Fixed salary: flat monthly amount, but reduced for ABSENT days the
+        // same way basic salary is prorated: (fixed_salary / month_days) * present_days.
+        // present_days already counts Sundays + holidays, so a full month with no
+        // absence pays the whole fixed amount. Still: no OT, no late deduction,
+        // no attendance-allowance. Deductions (insurance, advance, other) still apply.
+        $salary_earned = $month_days > 0 ? ($fixed_salary / $month_days) * $present_days : 0;
         $allowance_earned = 0;
         $att_allowance = 0;
         $late_att_allowance_removed = 0;
@@ -1473,7 +1474,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $ot_amount = 0;
         $total_late_hours = 0;
         $late_amount = 0;
-        $total_salary = $fixed_salary;
+        $total_salary = $salary_earned;
         $gross_total = max(0, $total_salary + $gross_food_allowance);
         $total_deduction = $insurance + $advance + $other_deduction;
         $net_payable = max(0, $gross_total - $total_deduction + $net_food_adjustment);
