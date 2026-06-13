@@ -1177,8 +1177,8 @@ body {
     <!-- ── Upload Employee Excel ── -->
     <div class="section" id="employee_upload">
         <h3>&#128100; Upload Employee Excel</h3>
-        <form action="import_employee.php" method="POST" enctype="multipart/form-data" class="upload-box">
-            <input type="file" name="excel" accept=".xlsx,.xls,.csv" required>
+        <form action="import_employees.php" method="POST" enctype="multipart/form-data" class="upload-box">
+            <input type="file" name="employee_file" accept=".xlsx,.csv" required>
             <button type="submit">&#8679; Upload Employee Excel</button>
         </form>
     </div>
