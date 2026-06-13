@@ -1096,7 +1096,7 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
         </div>
 
         <div class="form-group">
-            <label>Fixed Salary (AED) <small style="color:#64748b;font-weight:400;">— if &gt; 0, flat monthly pay (no attendance/OT)</small></label>
+            <label>Fixed Salary (AED) <small style="color:#64748b;font-weight:400;">— if &gt; 0, monthly pay (no OT; reduced for absent days)</small></label>
             <input type="number" step="0.01" min="0" name="fixed_salary" id="fixed_salary"
                    value="<?php echo htmlspecialchars(number_format($fixed_salary_value, 2, '.', '')); ?>">
         </div>
