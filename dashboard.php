@@ -214,8 +214,6 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
             WHEN $dashboard_active_employee_condition
                 AND check_in IS NOT NULL
                 AND TRIM(check_in) != '' THEN 1
-            WHEN DAYNAME(attendance_date) = 'Sunday' THEN 1
-            WHEN attendance_date IN ($holiday_in) THEN 1
             ELSE 0
         END) AS present,
         SUM(CASE
