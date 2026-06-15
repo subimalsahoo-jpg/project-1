@@ -3,9 +3,9 @@
    Central company branding + app credit.
    Included from auth.php, so it's available on every page.
 
-   To use YOUR real logo everywhere: drop the image file at
-       assets/logo.png   (png / jpg / webp / svg all supported)
-   It will automatically replace the bundled fallback mark.
+   The logo is loaded from the assets/ folder. The active company logo is:
+       assets/EURO_LOGO_clean.svg
+   (a different file named assets/logo.png|jpg|webp|svg also works as an override).
 ───────────────────────────────────────────── */
 if (!defined('COMPANY_NAME'))  define('COMPANY_NAME',  'EURO TROUSERS MFG CO (FZC)');
 if (!defined('COMPANY_SHORT')) define('COMPANY_SHORT', 'Euro Trousers');
@@ -15,12 +15,12 @@ if (!defined('APP_CREDIT'))    define('APP_CREDIT',    'Payroll Developed by Eur
 if (!function_exists('company_logo_url')) {
     function company_logo_url() {
         $dir = __DIR__;
-        foreach (['assets/logo.png', 'assets/logo.jpg', 'assets/logo.jpeg', 'assets/logo.webp', 'assets/logo.svg'] as $rel) {
+        foreach (['assets/EURO_LOGO_clean.svg', 'assets/logo.png', 'assets/logo.jpg', 'assets/logo.jpeg', 'assets/logo.webp', 'assets/logo.svg'] as $rel) {
             if (is_file($dir . '/' . $rel)) {
                 return $rel;
             }
         }
-        return 'assets/logo.svg';
+        return 'assets/EURO_LOGO_clean.svg';
     }
 }
 
