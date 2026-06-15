@@ -904,6 +904,7 @@ body {
         <?php endif; ?>
         <?php if(hasPermission('employee_add')): ?>
         <a href="add_employee.php">&#43; Add Employee</a>
+        <a href="employee_salary.php">&#128176; Salary Details</a>
         <?php endif; ?>
     </div>
     <?php endif; ?>

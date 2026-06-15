@@ -314,6 +314,8 @@ body{
 .delete:hover{background:#b91c1c;}
 .edit{background:#ea580c;}
 .edit:hover{background:#c2410c;}
+.salary{background:#16a34a;}
+.salary:hover{background:#15803d;}
 .search-box{
     background:white;
     padding:14px 20px;
@@ -750,6 +752,7 @@ table{width:100%;}
         <?php } ?>
         <td class="action-col">
             <a class="btn edit" href="add_employee.php?search_user_no=<?php echo urlencode($edit_user_no); ?>">Edit</a>
+            <a class="btn salary" href="employee_salary.php?user_no=<?php echo urlencode($edit_user_no); ?>">Salary</a>
             <a class="btn delete"
                href="delete_employee.php?id=<?php echo urlencode($row['id'] ?? ''); ?>"
                onclick="return confirm('Delete this employee?')">Delete</a>
