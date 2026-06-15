@@ -108,7 +108,6 @@ function salary_numbers_from_post() {
     $basic_salary  = num_val('basic_salary');
     $allowance     = num_val('allowance');
     $att_allowance = num_val('att_allowance');
-    $ot            = num_val('ot');               // OT amount (calculated)
     $food_company  = num_val('food_allowance_company');
     $food_won      = num_val('food_allowance_won');
     $fixed_salary  = num_val('fixed_salary');     // flat monthly salary (overrides attendance-based pay)
@@ -116,12 +115,12 @@ function salary_numbers_from_post() {
     $insurance     = num_val('insurance_amount');
     $other         = num_val('other_deduction');
 
-    // Fixed salary employees: flat amount + food, no basic/allowance/att/OT.
-    // Otherwise gross = all earnings including food_won (employee keeps this)
+    // Fixed salary employees: flat amount + food, no basic/allowance/att.
+    // OT is auto-calculated from attendance at salary generation, not set here.
     if ($fixed_salary > 0) {
         $gross = $fixed_salary + $food_won + $food_company;
     } else {
-        $gross = $basic_salary + $allowance + $att_allowance + $ot + $food_won + $food_company;
+        $gross = $basic_salary + $allowance + $att_allowance + $food_won + $food_company;
     }
     $total_deduction = $advance + $insurance + $other;
     $net_salary      = $gross - $total_deduction;
@@ -130,7 +129,6 @@ function salary_numbers_from_post() {
         'basic_salary'           => $basic_salary,
         'allowance'              => $allowance,
         'att_allowance'          => $att_allowance,
-        'ot'                     => $ot,
         'fixed_salary'           => $fixed_salary,
         'food_allowance_company' => $food_company,
         'food_allowance_won'     => $food_won,
@@ -344,32 +342,12 @@ $food_company_value    = (float)first_val($search_employee, ['food_allowance_com
 $food_won_value        = (float)first_val($search_employee, ['food_allowance_won'], 0);
 $salary_by_value       = first_val($search_employee, ['salary_by'], '');
 
-// OT from overtime_records for the selected month (auto)
-$monthly_ot_hours  = 0;
-$monthly_ot_amount = 0;
-if ($search_employee && !empty($search_employee['user_no'])) {
-    $safe_ot_user  = esc($conn, $search_employee['user_no']);
-    $safe_ot_month = esc($conn, $salary_lookup_month);
-    $ot_query = mysqli_query($conn, "
-        SELECT COALESCE(SUM(ot_hours), 0) AS total_ot_hours
-        FROM overtime_records
-        WHERE user_no='$safe_ot_user'
-        AND DATE_FORMAT(attendance_date, '%Y-%m')='$safe_ot_month'
-    ");
-    if ($ot_query && ($ot_row = mysqli_fetch_assoc($ot_query))) {
-        $monthly_ot_hours = (float)($ot_row['total_ot_hours'] ?? 0);
-    }
-    if ($basic_salary_value > 0 && $monthly_ot_hours > 0) {
-        $monthly_ot_amount = (($basic_salary_value / 30) / 8) * 1.25 * $monthly_ot_hours;
-    }
-}
-
-// Gross / Net (mirror add_employee + fixed-salary rule)
+// Gross / Net preview (OT is auto-calculated at salary generation, not shown here)
 if ($fixed_salary_value > 0) {
     $gross_salary_value = $fixed_salary_value + $food_won_value + $food_company_value;
 } else {
     $gross_salary_value = $basic_salary_value + $allowance_value + $att_allowance_value
-                        + $monthly_ot_amount + $food_won_value + $food_company_value;
+                        + $food_won_value + $food_company_value;
 }
 $total_deduction_value = $insurance_value + $other_deduction_value;
 $net_salary_value      = $gross_salary_value - $total_deduction_value;
@@ -529,18 +507,6 @@ body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f7; color: 
                 </div>
 
                 <div class="form-group">
-                    <label>OT Hours (auto from records)</label>
-                    <input type="number" step="0.01" name="ot_hours" id="ot_hours"
-                           value="<?php echo htmlspecialchars(number_format($monthly_ot_hours, 2, '.', '')); ?>" readonly>
-                </div>
-
-                <div class="form-group">
-                    <label>OT Amount (auto calculated)</label>
-                    <input type="number" step="0.01" name="ot" id="ot"
-                           value="<?php echo htmlspecialchars(number_format($monthly_ot_amount, 2, '.', '')); ?>" readonly>
-                </div>
-
-                <div class="form-group">
                     <label>Food Allowance — Own (AED)</label>
                     <input type="number" step="0.01" min="0" name="food_allowance_won" id="food_allowance_won"
                            value="<?php echo htmlspecialchars(number_format($food_won_value, 2, '.', '')); ?>">
@@ -624,24 +590,17 @@ function calculateNetSalary() {
     var basic       = numberValue('basic_salary');
     var allowance   = numberValue('allowance');
     var attAllow    = numberValue('att_allowance');
-    var otHours     = numberValue('ot_hours');
     var foodWon     = numberValue('food_allowance_won');
     var foodCompany = numberValue('food_allowance_company');
     var fixedSalary = numberValue('fixed_salary');
 
-    // OT amount = (basic / 30 / 8) * 1.25 * hours
-    var otAmount = basic > 0 ? ((basic / 30 / 8) * 1.25 * otHours) : 0;
-    if (!isFinite(otAmount)) otAmount = 0;
-
-    var otField = document.getElementById('ot');
-    if (otField) otField.value = otAmount.toFixed(2);
-
-    // Fixed salary employees: flat amount + food only (no basic/allowance/att/OT).
+    // Fixed salary employees: flat amount + food only (no basic/allowance/att).
+    // OT is auto-calculated from attendance at salary generation, not here.
     var gross;
     if (fixedSalary > 0) {
         gross = fixedSalary + foodWon + foodCompany;
     } else {
-        gross = basic + allowance + attAllow + otAmount + foodWon + foodCompany;
+        gross = basic + allowance + attAllow + foodWon + foodCompany;
     }
     var deductions = numberValue('insurance_amount') + numberValue('other_deduction');
     var net = gross - deductions;
