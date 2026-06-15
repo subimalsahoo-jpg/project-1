@@ -570,9 +570,14 @@ if ($is_generate_request && $employees_q) {
         }
 
         $regular_ot_hours = monthly_regular_ot_hours($conn, $user_no, $employee_id_value, $month);
-        $ot = monthly_ot_hours($conn, $user_no, $employee_id_value, $month);
-        $extra_ot_hours = monthly_uploaded_extra_ot_hours($conn, $user_no, $employee_id_value, $month);
-        $sunday_ot_hours = $use_sunday_ot ? monthly_sunday_ot_hours($conn, $user_no, $employee_id_value, $month) : 0;
+        $attendance_after6pm_ot = monthly_ot_hours($conn, $user_no, $employee_id_value, $month);
+        $uploaded_ot_total = monthly_uploaded_extra_ot_hours($conn, $user_no, $employee_id_value, $month);
+        $sunday_ot_hours = monthly_sunday_ot_hours($conn, $user_no, $employee_id_value, $month);
+        $nonsunday_uploaded_ot = max(0, $uploaded_ot_total - $sunday_ot_hours);
+        // After 6pm column = attendance after-6pm OT + non-Sunday uploaded OT (overtime_report)
+        $ot = $attendance_after6pm_ot + $nonsunday_uploaded_ot;
+        // Sunday OT column = Sunday uploaded OT only (overtime_report), paid at 1.5x
+        $extra_ot_hours = $sunday_ot_hours;
         $food_allowance_company = (float)pick($salary_source, ['food_allowance_company', 'food_allowance_(company)'], 0);
         $food_allowance_won = (float)pick($salary_source, ['food_allowance_won', 'food_allowance_(won)', 'food_allowance_own', 'food_allowance_(own)'], 0);
         if ($food_allowance_company == 0 && $food_allowance_won == 0) {
@@ -606,10 +611,7 @@ if ($is_generate_request && $employees_q) {
             $late_amount = ($basic_salary / 30 / 8) * 1.25 * $total_late_hours;
             $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
             $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot;
-            $non_sunday_extra_ot_hours = $use_sunday_ot ? max(0, $extra_ot_hours - $sunday_ot_hours) : $extra_ot_hours;
-            $uploaded_extra_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $non_sunday_extra_ot_hours;
-            $sunday_ot_amount = $use_sunday_ot ? round((($basic_salary / 30) / 8) * 1.5 * $sunday_ot_hours, 0) : 0;
-            $extra_ot_amount = $uploaded_extra_ot_amount + $sunday_ot_amount;
+            $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
             $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
             $salary_earned_for_generate = $month_days > 0 ? ($basic_salary / $month_days) * $working_days_for_generate : 0;
             $allowance_earned_for_generate = $month_days > 0 ? ($allowance / $month_days) * $working_days_for_generate : 0;
@@ -1325,8 +1327,8 @@ table.salary-table tbody tr td { position: static !important; }
         <th class="col-amount">Reg OT Amt</th>
         <th class="col-ot">After 6pm hrs</th>
         <th class="col-amount">After 6pm Amt</th>
-        <th class="col-ot">Extra OT hrs</th>
-        <th class="col-amount">Extra OT Amt</th>
+        <th class="col-ot">Sunday OT hrs</th>
+        <th class="col-amount">Sunday OT Amt</th>
         <th class="col-amount">OT Total</th>
         <th class="col-ot">Total Late</th>
         <th class="col-amount">Late Amount</th>
@@ -1365,20 +1367,23 @@ while ($emp = mysqli_fetch_assoc($result)) {
     if ($employee_base_att_allowance > 0) {
         $att_allowance = $employee_base_att_allowance;
     }
-    $ot_hours = isset($emp['ot']) && $emp['ot'] !== ''
-        ? (float)$emp['ot']
-        : monthly_ot_hours($conn, $user_no, $employee_id_value, $month);
-    if ($should_generate_employee) {
-        $ot_hours = monthly_ot_hours($conn, $user_no, $employee_id_value, $month);
-    }
     $regular_ot_hours = monthly_regular_ot_hours($conn, $user_no, $employee_id_value, $month);
-    $extra_ot_hours = monthly_uploaded_extra_ot_hours($conn, $user_no, $employee_id_value, $month);
-    $sunday_ot_hours_for_highlight = monthly_sunday_ot_hours($conn, $user_no, $employee_id_value, $month);
-    $sunday_ot_hours = ($should_generate_employee && $use_sunday_ot)
-        ? $sunday_ot_hours_for_highlight
-        : 0;
-    $ot_hours_class = $sunday_ot_hours_for_highlight > 0 ? 'sunday-ot' : '';
-    $ot_amount_class = ($should_generate_employee && $use_sunday_ot && $sunday_ot_hours_for_highlight > 0) ? 'sunday-ot' : '';
+    $attendance_after6pm_ot = monthly_ot_hours($conn, $user_no, $employee_id_value, $month);
+    $uploaded_ot_total = monthly_uploaded_extra_ot_hours($conn, $user_no, $employee_id_value, $month);
+    $sunday_ot_hours = monthly_sunday_ot_hours($conn, $user_no, $employee_id_value, $month);
+    $nonsunday_uploaded_ot = max(0, $uploaded_ot_total - $sunday_ot_hours);
+    // After 6pm column = attendance after-6pm OT + non-Sunday uploaded OT (overtime_report)
+    $live_after6pm_ot = $attendance_after6pm_ot + $nonsunday_uploaded_ot;
+
+    if ($should_generate_employee) {
+        $ot_hours = $live_after6pm_ot;       // After 6pm column
+        $extra_ot_hours = $sunday_ot_hours;  // Sunday OT column
+    } else {
+        $ot_hours = isset($emp['ot']) && $emp['ot'] !== '' ? (float)$emp['ot'] : $live_after6pm_ot;
+        $extra_ot_hours = isset($emp['extra_ot_hours']) && $emp['extra_ot_hours'] !== '' ? (float)$emp['extra_ot_hours'] : $sunday_ot_hours;
+    }
+    $ot_hours_class = '';
+    $ot_amount_class = $sunday_ot_hours > 0 ? 'sunday-ot' : '';
     $food_allowance_company = isset($emp['food_allowance_company']) && $emp['food_allowance_company'] !== ''
         ? (float)$emp['food_allowance_company']
         : (float)($emp['employee_food_allowance_company'] ?? 0);
@@ -1499,10 +1504,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $allowance_earned = $month_days > 0 ? ($allowance / $month_days) * $present_days : 0;
         $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
         $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot_hours;
-        $non_sunday_extra_ot_hours = $use_sunday_ot ? max(0, $extra_ot_hours - $sunday_ot_hours) : $extra_ot_hours;
-        $uploaded_extra_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $non_sunday_extra_ot_hours;
-        $sunday_ot_amount = $use_sunday_ot ? round((($basic_salary / 30) / 8) * 1.5 * $sunday_ot_hours, 0) : 0;
-        $extra_ot_amount = $uploaded_extra_ot_amount + $sunday_ot_amount;
+        $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
         $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
         $total_late_hours = $calculated_late_hours;
         $late_amount = $calculated_late_amount;
@@ -1525,8 +1527,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
             : (($basic_salary / 30 / 8) * 1.25 * $ot_hours);
         $extra_ot_amount = isset($emp['extra_ot_amount']) && $emp['extra_ot_amount'] !== ''
             ? (float)$emp['extra_ot_amount']
-            : (((($basic_salary / 30) / 8) * 1.25 * ($use_sunday_ot ? max(0, $extra_ot_hours - $sunday_ot_hours) : $extra_ot_hours))
-                + ($use_sunday_ot ? round((($basic_salary / 30) / 8) * 1.5 * $sunday_ot_hours, 0) : 0));
+            : (($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours);
         $ot_amount = isset($emp['ot_amount']) && $emp['ot_amount'] !== ''
             ? (float)$emp['ot_amount']
             : ($regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount);
