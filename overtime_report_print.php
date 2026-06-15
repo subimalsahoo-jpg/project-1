@@ -13,8 +13,8 @@ include 'auth.php';
 requirePermission('reports_view');
 
 /* ── Company identity (edit here if it changes) ── */
-$COMPANY_NAME = 'EURO TROUSERS MFG CO (FZC)';
-$COMPANY_LOGO = ''; // optional path under uploads/, e.g. 'uploads/logo.png'
+$COMPANY_NAME = COMPANY_NAME;
+$COMPANY_LOGO = company_logo_url();
 
 /* ── Inputs / date range ── */
 $user_no   = trim($_GET['user_no'] ?? '');
@@ -204,11 +204,7 @@ table.ot tfoot td.lbl { background: #1a3a5c; color: #fff; text-align: right; }
     <!-- ── Report Header ── -->
     <div class="rpt-head">
         <div class="rpt-logo">
-            <?php if ($COMPANY_LOGO !== '' && file_exists($COMPANY_LOGO)): ?>
-                <img src="<?php echo htmlspecialchars($COMPANY_LOGO); ?>" alt="Logo">
-            <?php else: ?>
-                ET
-            <?php endif; ?>
+            <img src="<?php echo htmlspecialchars(company_logo_url()); ?>" alt="<?php echo htmlspecialchars($COMPANY_NAME); ?>">
         </div>
         <div class="co-info">
             <div class="co-name"><?php echo htmlspecialchars($COMPANY_NAME); ?></div>

@@ -355,6 +355,7 @@ tbody td.td-left { text-align:left; padding-left:16px; }
     <div class="topbar-left">
         <a href="dashboard.php" class="tbtn">&#8592; Dashboard</a>
         <a href="ot_upload.php"  class="tbtn">&#8679; OT Upload</a>
+        <?php echo company_logo_img(30, 'background:#fff;border-radius:5px;padding:2px 4px;margin-right:6px;'); ?>
         <span class="logo">EURO TROUSERS <span>MFG CO (FZC)</span></span>
     </div>
     <div>

@@ -774,7 +774,7 @@ textarea { height: 48px; resize: vertical; }
 
 <!-- ══ SIDEBAR ════════════════════════════════════════════════════════════════ -->
 <nav class="sidebar">
-    <div class="sidebar-logo">Payroll Management<br>System</div>
+    <div class="sidebar-logo"><?php echo company_logo_img(30, 'background:#fff;border-radius:5px;padding:2px;margin-bottom:4px;'); ?><br>Payroll Management<br>System</div>
 
     <?php if (!$isViewerRole): ?>
     <div class="menu-item"><a href="dashboard.php">Dashboard</a></div>

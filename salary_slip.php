@@ -134,6 +134,7 @@ function payslipBlock(
 <div class="payslip">
 
     <div class="company">
+        <?php echo company_logo_img(58, 'margin-bottom:6px;'); ?>
         <h2>Euro Trousers MFG. Co. FZC</h2>
         <p>J001-02, Saif Zone, Sharjah, UAE</p>
     </div>

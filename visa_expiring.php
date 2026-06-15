@@ -276,6 +276,7 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
 <div class="topbar">
     <div class="topbar-left">
         <a href="dashboard.php" class="btn-back">&#8592; Dashboard</a>
+        <?php echo company_logo_img(30, 'background:#fff;border-radius:5px;padding:2px 4px;margin-right:6px;'); ?>
         <span class="topbar-logo">EURO TROUSERS <span>MFG CO (FZC)</span></span>
     </div>
     <div class="topbar-right">

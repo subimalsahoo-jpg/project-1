@@ -375,6 +375,18 @@ body {
     flex-direction: column;
     gap: 4px;
 }
+.sidebar-credit {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.55);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+}
 
 .logo {
     font-size: 15px;
@@ -893,7 +905,7 @@ body {
      Sidebar
 ══════════════════════════════ -->
 <div class="sidebar">
-    <div class="logo">&#128188; Payroll Management System</div>
+    <div class="logo"><?php echo company_logo_img(26, 'background:#fff;border-radius:5px;padding:2px;margin-right:6px;'); ?> Payroll Management System</div>
 
     <div class="menu-title active">&#127968; Dashboard</div>
 
@@ -960,6 +972,11 @@ body {
     <?php if(hasPermission('user_manage')): ?>
     <div class="menu-title" onclick="location.href='manage_users.php'">&#9881; User Management</div>
     <?php endif; ?>
+
+    <div class="sidebar-credit">
+        <?php echo company_logo_img(20, 'background:#fff;border-radius:4px;padding:2px;margin-right:5px;'); ?>
+        <span><?php echo htmlspecialchars(APP_CREDIT); ?></span>
+    </div>
 </div>
 
 <!-- ══════════════════════════════
@@ -970,7 +987,7 @@ body {
     <!-- Topbar -->
     <div class="topbar">
         <div>
-            <h2>&#127970; Euro Trousers MFG. Co. FZC</h2>
+            <h2><?php echo company_logo_img(28, 'margin-right:6px;'); ?> Euro Trousers MFG. Co. FZC</h2>
             <small><?php echo date("l, d F Y"); ?></small>
         </div>
         <div class="topbar-right">

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 232 215" role="img" aria-label="Euro Trousers MFG Co (FZC)">
+  <!-- Euro symbol -->
+  <text x="-6" y="178" font-family="'Arial Black', Arial, sans-serif" font-weight="900" font-size="215" fill="#1a1aa0">&#8364;</text>
+  <!-- Hanger hook -->
+  <path d="M183 47 q-3 -13 8 -13 q10 0 9 10" fill="none" stroke="#1a1aa0" stroke-width="5" stroke-linecap="round"/>
+  <!-- Hanger bar -->
+  <path d="M183 47 L183 60 M151 67 L183 47 L215 67" fill="none" stroke="#1a1aa0" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Trousers -->
+  <path d="M150 79 H216 L209 200 H191 L183 104 L175 200 H157 Z" fill="#1a1aa0"/>
+</svg>
