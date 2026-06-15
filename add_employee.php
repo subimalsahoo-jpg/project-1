@@ -1074,107 +1074,18 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
             <?php echo $search_employee ? '&#9998; Edit / Update Employee' : '&#43; Add Employee'; ?>
         </button>
 
-        <!-- ── Salary Details section ── -->
-        <div class="section-title">&#128181; Salary Details</div>
+        <?php if ($search_employee): ?>
+        <a href="employee_salary.php?user_no=<?php echo urlencode(val($search_employee, 'user_no')); ?>"
+           class="employee-save"
+           style="display:block;text-align:center;text-decoration:none;background:#16a34a;border-color:#16a34a;color:#fff;margin-top:14px;">
+            &#128176; Manage Salary &amp; Deductions &#8594;
+        </a>
+        <?php else: ?>
+        <p style="margin-top:14px;text-align:center;color:#64748b;font-size:13px;">
+            &#128176; Save the employee first, then set salary from the <b>Salary Details</b> page.
+        </p>
+        <?php endif; ?>
 
-        <div class="form-group">
-            <label>Basic Salary (AED)</label>
-            <input type="number" step="0.01" min="0" name="basic_salary" id="basic_salary"
-                   value="<?php echo htmlspecialchars(number_format($basic_salary_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Allowance (AED)</label>
-            <input type="number" step="0.01" min="0" name="allowance" id="allowance"
-                   value="<?php echo htmlspecialchars(number_format($allowance_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Attendance Allowance (AED)</label>
-            <input type="number" step="0.01" min="0" name="att_allowance" id="att_allowance"
-                   value="<?php echo htmlspecialchars(number_format($att_allowance_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Fixed Salary (AED) <small style="color:#64748b;font-weight:400;">— if &gt; 0, monthly pay (no OT; reduced for absent days)</small></label>
-            <input type="number" step="0.01" min="0" name="fixed_salary" id="fixed_salary"
-                   value="<?php echo htmlspecialchars(number_format($fixed_salary_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>OT Hours (auto from records)</label>
-            <input type="number" step="0.01" name="ot_hours" id="ot_hours"
-                   value="<?php echo htmlspecialchars(number_format($monthly_ot_hours, 2, '.', '')); ?>" readonly>
-        </div>
-
-        <div class="form-group">
-            <label>OT Amount (auto calculated)</label>
-            <input type="number" step="0.01" name="ot" id="ot"
-                   value="<?php echo htmlspecialchars(number_format($monthly_ot_amount, 2, '.', '')); ?>" readonly>
-        </div>
-
-        <div class="form-group">
-            <label>Food Allowance — Own (AED)</label>
-            <input type="number" step="0.01" min="0" name="food_allowance_won" id="food_allowance_won"
-                   value="<?php echo htmlspecialchars(number_format($food_won_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Food Allowance — Company (AED)</label>
-            <input type="number" step="0.01" min="0" name="food_allowance_company" id="food_allowance_company"
-                   value="<?php echo htmlspecialchars(number_format($food_company_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Salary By</label>
-            <select name="salary_by" id="salary_by">
-                <option value="">Select Payment Method</option>
-                <option value="Cash" <?php echo selected($search_employee, 'salary_by', 'Cash'); ?>>Cash</option>
-                <option value="Bank" <?php echo selected($search_employee, 'salary_by', 'Bank'); ?>>Bank</option>
-            </select>
-        </div>
-
-        <div class="net-salary-row">
-            <span>&#128200; Gross Salary</span>
-            <span><span id="gross_salary_text"><?php echo money($gross_salary_value); ?></span> AED</span>
-            <input type="hidden" name="gross_salary" id="gross_salary" value="<?php echo htmlspecialchars(number_format($gross_salary_value, 2, '.', '')); ?>">
-            <input type="hidden" name="net_salary"   id="net_salary"   value="<?php echo htmlspecialchars(number_format($net_salary_value, 2, '.', '')); ?>">
-        </div>
-
-        <!-- ── Deduction section ── -->
-        <div class="section-title">&#9940; Deduction Details</div>
-
-        <div class="form-group">
-            <label>Insurance (AED)</label>
-            <input type="number" step="0.01" min="0" name="insurance_amount" id="insurance_amount"
-                   value="<?php echo htmlspecialchars(number_format($insurance_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <label>Other Deduction (AED)</label>
-            <input type="number" step="0.01" min="0" name="other_deduction" id="other_deduction"
-                   value="<?php echo htmlspecialchars(number_format($other_deduction_value, 2, '.', '')); ?>">
-        </div>
-
-        <div class="form-group">
-            <!-- placeholder so deduction section has even columns -->
-        </div>
-
-        <div class="net-salary-actual">
-            <span>&#9989; Net Salary</span>
-            <span><span id="net_salary_text"><?php echo money($net_salary_value); ?></span> AED</span>
-        </div>
-
-        <div class="salary-action-row">
-            <button type="submit" name="save_salary" class="salary-submit">
-                &#128190; Save Salary Details
-            </button>
-            <div class="salary-month-box">
-                <label>Month</label>
-                <input type="month" name="salary_month"
-                       value="<?php echo htmlspecialchars($salary_month); ?>">
-            </div>
-        </div>
 
     </div><!-- /.form-grid -->
 </form>
@@ -1204,24 +1115,10 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
     <div class="detail-row"><b>Emirates ID:</b>       <?php echo htmlspecialchars(val($search_employee, 'emirates_id_number')); ?></div>
     <div class="detail-row"><b>Visa Expiry:</b>       <?php echo htmlspecialchars(display_date_dmy(val($search_employee, 'visa_expiry_date'))); ?></div>
     <hr style="margin:10px 0;border-color:#e9ecef;">
-    <div class="detail-row"><b>Basic Salary:</b>      <?php echo money($basic_salary_value); ?> AED</div>
-    <div class="detail-row"><b>Allowance:</b>         <?php echo money($allowance_value); ?> AED</div>
-    <div class="detail-row"><b>Att. Allowance:</b>    <?php echo money($att_allowance_value); ?> AED</div>
-    <div class="detail-row"><b>OT Hours:</b>          <?php echo number_format($monthly_ot_hours, 2); ?></div>
-    <div class="detail-row"><b>OT Amount:</b>         <?php echo money($monthly_ot_amount); ?> AED</div>
-    <div class="detail-row"><b>Food (Company):</b>    <?php echo money($food_company_value); ?> AED</div>
-    <div class="detail-row"><b>Food (Own):</b>        <?php echo money($food_won_value); ?> AED</div>
-    <div class="detail-row"><b>Insurance:</b>         <?php echo money($insurance_value); ?> AED</div>
-    <div class="detail-row"><b>Other Deduction:</b>   <?php echo money($other_deduction_value); ?> AED</div>
-    <div class="detail-row"><b>Salary By:</b>         <?php echo htmlspecialchars(first_val($search_employee, ['salary_by'])); ?></div>
-    <div class="detail-row" style="background:#f0fdf4;border-radius:6px;padding:8px 10px;">
-        <b style="color:#16a34a;">Gross Salary:</b>
-        <span style="color:#16a34a;font-weight:700;"><?php echo money($gross_salary_value); ?> AED</span>
-    </div>
-    <div class="detail-row" style="background:#eff6ff;border-radius:6px;padding:8px 10px;margin-top:4px;">
-        <b style="color:#1d4ed8;">Net Salary:</b>
-        <span style="color:#1d4ed8;font-weight:700;"><?php echo money($net_salary_value); ?> AED</span>
-    </div>
+    <a href="employee_salary.php?user_no=<?php echo urlencode(val($search_employee, 'user_no')); ?>"
+       style="display:block;text-align:center;background:#16a34a;color:#fff;padding:10px;border-radius:6px;text-decoration:none;font-weight:600;">
+        &#128176; Manage Salary &amp; Deductions &#8594;
+    </a>
     <?php else: ?>
     <p class="empty-detail">Search by User No / Name / Employee ID to view employee details here.</p>
     <?php endif; ?>
@@ -1229,61 +1126,5 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
 
 </div><!-- /.main-layout -->
 
-<script>
-function numberValue(id) {
-    var el = document.getElementById(id);
-    if (!el) return 0;
-    var v = parseFloat(el.value);
-    return isNaN(v) ? 0 : v;
-}
-
-function calculateNetSalary() {
-    var basic       = numberValue('basic_salary');
-    var allowance   = numberValue('allowance');
-    var attAllow    = numberValue('att_allowance');
-    var otHours     = numberValue('ot_hours');
-    var foodWon     = numberValue('food_allowance_won');
-    var foodCompany = numberValue('food_allowance_company');
-    var fixedSalary = numberValue('fixed_salary');
-
-    // OT amount = (basic / 30 / 8) * 1.25 * hours
-    var otAmount = basic > 0 ? ((basic / 30 / 8) * 1.25 * otHours) : 0;
-    if (!isFinite(otAmount)) otAmount = 0;
-
-    // Update OT amount field (readonly display)
-    var otField = document.getElementById('ot');
-    if (otField) otField.value = otAmount.toFixed(2);
-
-    // Fixed salary employees: flat amount + food only (no basic/allowance/att/OT).
-    // Otherwise gross = all salary components including both food types
-    var gross;
-    if (fixedSalary > 0) {
-        gross = fixedSalary + foodWon + foodCompany;
-    } else {
-        gross = basic + allowance + attAllow + otAmount + foodWon + foodCompany;
-    }
-    var deductions = numberValue('insurance_amount')
-                   + numberValue('other_deduction');
-    var net = gross - deductions;
-
-    document.getElementById('gross_salary').value        = gross.toFixed(2);
-    document.getElementById('net_salary').value          = net.toFixed(2);
-    document.getElementById('gross_salary_text').innerText = gross.toFixed(2);
-    document.getElementById('net_salary_text').innerText   = net.toFixed(2);
-}
-
-// Attach listeners
-[
-    'basic_salary', 'allowance', 'att_allowance', 'fixed_salary',
-    'food_allowance_company', 'food_allowance_won',
-    'insurance_amount', 'other_deduction'
-].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('input', calculateNetSalary);
-});
-
-// Run on page load
-calculateNetSalary();
-</script>
 </body>
 </html>
