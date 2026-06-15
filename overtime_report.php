@@ -439,6 +439,11 @@ tbody td.td-left { text-align:left; padding-left:16px; }
                         onclick="openAdd('<?php echo htmlspecialchars($u, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>')">
                         + Add OT
                     </button>
+                    <a class="btn btn-primary btn-sm"
+                       href="overtime_report_print.php?user_no=<?php echo urlencode($u); ?>&month=<?php echo urlencode($month); ?>"
+                       target="_blank" rel="noopener">
+                        &#128438; Report
+                    </a>
                 </td>
             </tr>
             <tr id="<?php echo $did; ?>" class="detail-row">
