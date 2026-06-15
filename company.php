@@ -15,12 +15,12 @@ if (!defined('APP_CREDIT'))    define('APP_CREDIT',    'Payroll Developed by Eur
 if (!function_exists('company_logo_url')) {
     function company_logo_url() {
         $dir = __DIR__;
-        foreach (['assets/logo.png', 'assets/logo.jpg', 'assets/logo.jpeg', 'assets/logo.webp', 'assets/logo.svg'] as $rel) {
+        foreach (['assets/EURO_LOGO_clean.svg', 'assets/logo.png', 'assets/logo.jpg', 'assets/logo.jpeg', 'assets/logo.webp', 'assets/logo.svg'] as $rel) {
             if (is_file($dir . '/' . $rel)) {
                 return $rel;
             }
         }
-        return 'assets/logo.svg';
+        return 'assets/EURO_LOGO_clean.svg';
     }
 }
 
