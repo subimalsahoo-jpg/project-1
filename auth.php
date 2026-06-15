@@ -7,6 +7,8 @@ if (!isset($conn)) {
     include 'db.php';
 }
 
+include_once __DIR__ . '/company.php';
+
 function auth_table_columns($conn, $table) {
     $columns = [];
     $safe_table = mysqli_real_escape_string($conn, $table);
