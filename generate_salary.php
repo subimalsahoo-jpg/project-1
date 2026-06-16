@@ -1375,13 +1375,10 @@ while ($emp = mysqli_fetch_assoc($result)) {
     // After 6pm column = attendance after-6pm OT + non-Sunday uploaded OT (overtime_report)
     $live_after6pm_ot = $attendance_after6pm_ot + $nonsunday_uploaded_ot;
 
-    if ($should_generate_employee) {
-        $ot_hours = $live_after6pm_ot;       // After 6pm column
-        $extra_ot_hours = $sunday_ot_hours;  // Sunday OT column
-    } else {
-        $ot_hours = isset($emp['ot']) && $emp['ot'] !== '' ? (float)$emp['ot'] : $live_after6pm_ot;
-        $extra_ot_hours = isset($emp['extra_ot_hours']) && $emp['extra_ot_hours'] !== '' ? (float)$emp['extra_ot_hours'] : $sunday_ot_hours;
-    }
+    // OT is derived from attendance + overtime_report (overtime_records) entries,
+    // so always show the current values rather than a stale saved snapshot.
+    $ot_hours = $live_after6pm_ot;       // After 6pm = attendance after-6pm + non-Sunday uploaded OT
+    $extra_ot_hours = $sunday_ot_hours;  // Sunday OT = Sunday uploaded OT
     $ot_hours_class = '';
     $ot_amount_class = $sunday_ot_hours > 0 ? 'sunday-ot' : '';
     $food_allowance_company = isset($emp['food_allowance_company']) && $emp['food_allowance_company'] !== ''
@@ -1519,18 +1516,11 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $allowance_earned = isset($emp['allowance_earned']) && $emp['allowance_earned'] !== ''
             ? (float)$emp['allowance_earned']
             : ($month_days > 0 ? ($allowance / $month_days) * $present_days : 0);
-        $regular_ot_amount = isset($emp['regular_ot_amount']) && $emp['regular_ot_amount'] !== ''
-            ? (float)$emp['regular_ot_amount']
-            : (($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours);
-        $after6pm_ot_amount = isset($emp['after6pm_ot_amount']) && $emp['after6pm_ot_amount'] !== ''
-            ? (float)$emp['after6pm_ot_amount']
-            : (($basic_salary / 30 / 8) * 1.25 * $ot_hours);
-        $extra_ot_amount = isset($emp['extra_ot_amount']) && $emp['extra_ot_amount'] !== ''
-            ? (float)$emp['extra_ot_amount']
-            : (($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours);
-        $ot_amount = isset($emp['ot_amount']) && $emp['ot_amount'] !== ''
-            ? (float)$emp['ot_amount']
-            : ($regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount);
+        // OT amounts always reflect the live OT hours above (attendance + overtime_report)
+        $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
+        $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot_hours;
+        $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
+        $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
         // Total salary is computed from the components shown in this row, so it
         // always matches them. (Previously a saved total had the removed
         // attendance-allowance / late subtracted again, double-counting the
