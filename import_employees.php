@@ -577,6 +577,7 @@ ul {
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <a href="dashboard.php" class="btn">Dashboard</a>
 <a href="add_employee.php" class="btn">Add Employee</a>

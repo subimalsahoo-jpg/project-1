@@ -536,6 +536,7 @@ td.absent-row  { background: #fee2e2 !important; }
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- Header -->
 <div class="header">

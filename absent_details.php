@@ -137,6 +137,7 @@ tr:nth-child(even){background:#f8fafc;}
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="page-header">
     <h1 class="page-title">&#128197; Absent Details</h1>
     <a href="dashboard.php" class="btn">&#9776; Dashboard</a>

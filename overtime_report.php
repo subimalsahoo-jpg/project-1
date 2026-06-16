@@ -349,6 +349,7 @@ tbody td.td-left { text-align:left; padding-left:16px; }
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- Topbar -->
 <div class="topbar">

@@ -126,6 +126,7 @@ $advances = mysqli_query($conn, "
     </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="page">
     <div class="topbar">
         <h2>Advance Salary</h2>

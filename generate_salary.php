@@ -1214,6 +1214,7 @@ table.salary-table tbody tr td { position: static !important; }
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- â•â• TOP BAR â•â• -->
 <div class="topbar">

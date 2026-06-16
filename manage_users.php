@@ -148,6 +148,7 @@ $users = mysqli_query($conn, "SELECT id, username, full_name, role, status, crea
     </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="top">
     <h2>User Management</h2>
     <div>

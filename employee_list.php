@@ -590,6 +590,7 @@ table{width:100%;}
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="page-wrapper">
 
 <div class="header-row">

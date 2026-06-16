@@ -135,6 +135,7 @@ body{font-family:Arial;background:#f4f6f9;padding:30px;}
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <a href="dashboard.php" class="btn">Dashboard</a>
 <a href="overtime_report.php" class="btn">Over Time Report</a>

@@ -16,6 +16,7 @@ requirePermission('attendance_upload');
     </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="wrap">
     <a href="dashboard.php" class="btn">Dashboard</a>
 
