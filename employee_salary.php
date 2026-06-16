@@ -318,6 +318,23 @@ if (isset($_POST['save_salary'])) {
     } else {
         $ok = save_salary_values($conn, $employees_columns, $salary_columns, $id, $user_no, $employee_id, $salary, $salary_month);
         if ($ok) {
+            // Sync the edited base salary components into the employees master,
+            // because salary generation reads the employees table first for these
+            // values (e.g. Good Attendance / att_allowance). Without this, edits made
+            // here were ignored and the old master value was used on generate.
+            $sync_fields = ['basic_salary', 'allowance', 'att_allowance', 'fixed_salary',
+                            'food_allowance_company', 'food_allowance_won', 'food_allowance',
+                            'insurance_amount', 'other_deduction', 'salary_by'];
+            $emp_sets = [];
+            foreach ($sync_fields as $sf) {
+                if (array_key_exists($sf, $salary)) {
+                    sql_set($conn, $employees_columns, $sf, $salary[$sf], $emp_sets);
+                }
+            }
+            if (!empty($emp_sets)) {
+                mysqli_query($conn, "UPDATE employees SET " . implode(',', $emp_sets) . " WHERE user_no='" . esc($conn, $user_no) . "'");
+            }
+
             $month_label = $salary_month !== '' ? date('F Y', strtotime($salary_month . "-01")) : "Running Salary";
             $message = "<div class='message success'>Salary saved for $month_label. Net Salary: " . money($salary['net_salary']) . " AED</div>";
             $res = mysqli_query($conn, "SELECT * FROM employees WHERE user_no='" . esc($conn, $user_no) . "' LIMIT 1");
