@@ -844,6 +844,7 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <a href="dashboard.php" class="btn btn-dark">&#8592; Dashboard</a>
 <a href="employee_list.php" class="btn">Employee List</a>

@@ -447,6 +447,7 @@ body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f7; color: 
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <div class="header">
     <h2>&#128176; Salary Details</h2>

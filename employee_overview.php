@@ -282,7 +282,7 @@ body {
 
 /* ── Main content ─────────────────────────────────────────── */
 .main {
-    margin-left: var(--sidebar-w);
+    margin-left: 0;
     padding: 0 0 40px;
     min-height: 100vh;
 }
@@ -773,46 +773,7 @@ textarea { height: 48px; resize: vertical; }
 <body>
 
 <!-- ══ SIDEBAR ════════════════════════════════════════════════════════════════ -->
-<nav class="sidebar">
-    <div class="sidebar-logo"><?php echo company_logo_img(30, 'background:#fff;border-radius:5px;padding:2px;margin-bottom:4px;'); ?><br>Payroll Management<br>System</div>
-
-    <?php if (!$isViewerRole): ?>
-    <div class="menu-item"><a href="dashboard.php">Dashboard</a></div>
-    <?php endif; ?>
-
-    <div class="menu-item active" onclick="toggleMenu('emp')">Employees <span>▾</span></div>
-    <div class="submenu open" id="emp">
-        <a href="employee_overview.php">Employee Overview</a>
-        <?php if (!$isViewerRole): ?>
-        <a href="add_employee.php">Add Employee</a>
-        <a href="employee_list.php">Employee Details</a>
-        <?php endif; ?>
-    </div>
-
-    <?php if (!$isViewerRole): ?>
-    <div class="menu-item" onclick="toggleMenu('report')">Reports <span>▾</span></div>
-    <div class="submenu" id="report">
-        <a href="generate_salary.php">Salary</a>
-        <a href="salary_slip.php">Salary Slip Generate</a>
-        <a href="attendance_report.php">Attendance Report</a>
-    </div>
-
-    <div class="menu-item" onclick="toggleMenu('vacation')">Vacation <span>▾</span></div>
-    <div class="submenu" id="vacation">
-        <a href="add_vacation.php">Add Vacation Employee</a>
-        <a href="vacation_details.php">Vacation Details</a>
-        <a href="absent_details.php">Absent Details</a>
-        <a href="holidays.php">Holiday Details</a>
-    </div>
-
-    <div class="menu-item" onclick="toggleMenu('upload')">Uploads <span>▾</span></div>
-    <div class="submenu" id="upload">
-        <a href="dashboard.php#employee_upload">Upload Employee Excel</a>
-        <a href="dashboard.php#attendance_upload">Upload Attendance</a>
-        <a href="ot_upload.php">OT Upload</a>
-    </div>
-    <?php endif; ?>
-</nav>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- ══ MAIN ═══════════════════════════════════════════════════════════════════ -->
 <main class="main">

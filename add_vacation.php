@@ -82,6 +82,7 @@ function getEmployeeName(){
 </script>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 <div class="box">
     <div class="top">
         <h2>Add Vacation</h2>

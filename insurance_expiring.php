@@ -292,6 +292,7 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- Top Bar -->
 <div class="topbar">

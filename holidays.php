@@ -211,6 +211,7 @@ th{
 </head>
 
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <div class="header">
     <h2>Holiday Details / Add Holidays</h2>

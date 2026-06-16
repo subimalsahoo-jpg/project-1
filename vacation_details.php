@@ -367,6 +367,7 @@ tbody tr:hover td{background:#f8fafc;}
 </style>
 </head>
 <body>
+<?php include 'nav_sidebar.php'; ?>
 
 <div class="page-header">
     <h1 class="page-title">&#127965; Vacation Details</h1>
