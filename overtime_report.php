@@ -106,6 +106,105 @@ $safe_userno = mysqli_real_escape_string($conn, $user_no);
 $where = "WHERE DATE_FORMAT(o.attendance_date, '%Y-%m') = '$safe_month'";
 if ($user_no !== '') $where .= " AND o.user_no='$safe_userno'";
 
+/* ─────────────────────────────────────────────
+   Excel export: professional date-wise OT report with amounts.
+   Per employee: OT days, each date + hours, OT rate (from basic), OT amount,
+   subtotal; plus a grand total. Sunday/Holiday paid at 1.5x, else 1.25x.
+───────────────────────────────────────────── */
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $exp = mysqli_query($conn, "
+        SELECT o.user_no, o.attendance_date, o.ot_hours, COALESCE(o.note,'') AS note,
+               COALESCE(e.full_name,'') AS full_name, COALESCE(e.department,'') AS department,
+               COALESCE(e.designation,'') AS designation, COALESCE(e.basic_salary,0) AS basic_salary
+        FROM overtime_records o
+        LEFT JOIN employees e ON e.user_no = o.user_no
+        $where AND o.ot_hours > 0
+        ORDER BY CAST(o.user_no AS UNSIGNED) ASC, o.attendance_date ASC
+    ");
+
+    $holiday_dates = [];
+    $hq = mysqli_query($conn, "SELECT holiday_date FROM holidays WHERE DATE_FORMAT(holiday_date,'%Y-%m')='$safe_month'");
+    if ($hq) { while ($h = mysqli_fetch_assoc($hq)) { $holiday_dates[$h['holiday_date']] = true; } }
+
+    $emp_rows = [];
+    if ($exp) { while ($r = mysqli_fetch_assoc($exp)) { $emp_rows[$r['user_no']][] = $r; } }
+
+    $company  = defined('COMPANY_NAME') ? COMPANY_NAME : 'EURO TROUSERS MFG CO (FZC)';
+    $fname    = 'overtime_report_' . $month . ($user_no !== '' ? '_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $user_no) : '') . '.xls';
+    header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+    header("Content-Disposition: attachment; filename=$fname");
+    header("Pragma: no-cache");
+    header("Expires: 0");
+    echo "\xEF\xBB\xBF";
+
+    $m = function ($v) { return number_format((float)$v, 2); };
+    $grand_hours = 0; $grand_amount = 0; $grand_days = 0;
+
+    echo '<table border="1" cellspacing="0" cellpadding="5">';
+    echo '<tr><td colspan="6" style="font-size:16px;font-weight:bold;background:#1a3a5c;color:#ffffff;">' . htmlspecialchars($company) . '</td></tr>';
+    echo '<tr><td colspan="6" style="font-weight:bold;font-size:13px;">Employee Overtime Report &mdash; ' . htmlspecialchars($month_label) . '</td></tr>';
+    echo '<tr><td colspan="6">Generated: ' . date('d-m-Y h:i A') . '</td></tr>';
+
+    if (empty($emp_rows)) {
+        echo '<tr><td colspan="6">No overtime records for this period.</td></tr>';
+    } else {
+        foreach ($emp_rows as $uno => $rows) {
+            $info   = $rows[0];
+            $basic  = (float)$info['basic_salary'];
+            $hourly = $basic > 0 ? ($basic / 30 / 8) : 0;
+            $rate_n = round($hourly * 1.25, 2);
+            $rate_s = round($hourly * 1.50, 2);
+
+            echo '<tr><td colspan="6"></td></tr>';
+            echo '<tr style="background:#2563a8;color:#ffffff;font-weight:bold;">'
+               . '<td>User No: ' . htmlspecialchars($uno) . '</td>'
+               . '<td colspan="2">' . htmlspecialchars($info['full_name']) . '</td>'
+               . '<td>Dept: ' . htmlspecialchars($info['department']) . '</td>'
+               . '<td>' . htmlspecialchars($info['designation']) . '</td>'
+               . '<td>Basic: ' . $m($basic) . ' AED</td></tr>';
+            echo '<tr style="background:#eef3fb;"><td colspan="6">OT Rate / hour &mdash; Normal: ' . $m($rate_n) . ' AED&nbsp;&nbsp;|&nbsp;&nbsp;Sunday / Holiday: ' . $m($rate_s) . ' AED</td></tr>';
+            echo '<tr style="background:#1a3a5c;color:#ffffff;font-weight:bold;">'
+               . '<td>Date</td><td>Day</td><td>Type</td><td>OT Hours</td><td>OT Rate</td><td>OT Amount (AED)</td></tr>';
+
+            $emp_hours = 0; $emp_amount = 0;
+            foreach ($rows as $d) {
+                $date  = $d['attendance_date'];
+                $day   = date('l', strtotime($date));
+                $isSun = ($day === 'Sunday');
+                $isHol = isset($holiday_dates[$date]);
+                $type  = $isHol ? 'Holiday' : ($isSun ? 'Sunday' : 'Normal');
+                $rate  = ($isSun || $isHol) ? $rate_s : $rate_n;
+                $hours = (float)$d['ot_hours'];
+                $amount = round($hours * $rate, 2);
+                $emp_hours += $hours; $emp_amount += $amount;
+                echo '<tr>'
+                   . '<td>' . date('d-m-Y', strtotime($date)) . '</td>'
+                   . '<td>' . $day . '</td>'
+                   . '<td>' . $type . '</td>'
+                   . '<td>' . number_format($hours, 2) . '</td>'
+                   . '<td>' . $m($rate) . '</td>'
+                   . '<td>' . $m($amount) . '</td></tr>';
+            }
+            $days = count($rows);
+            echo '<tr style="background:#fff3cd;font-weight:bold;">'
+               . '<td colspan="3">Total &mdash; ' . $days . ' OT day(s)</td>'
+               . '<td>' . number_format($emp_hours, 2) . '</td>'
+               . '<td>Total AED</td>'
+               . '<td>' . $m($emp_amount) . '</td></tr>';
+
+            $grand_hours += $emp_hours; $grand_amount += $emp_amount; $grand_days += $days;
+        }
+        echo '<tr><td colspan="6"></td></tr>';
+        echo '<tr style="background:#1a3a5c;color:#ffffff;font-weight:bold;">'
+           . '<td colspan="3">GRAND TOTAL (' . $grand_days . ' OT day(s))</td>'
+           . '<td>' . number_format($grand_hours, 2) . '</td>'
+           . '<td></td>'
+           . '<td>' . $m($grand_amount) . '</td></tr>';
+    }
+    echo '</table>';
+    exit;
+}
+
 $summary_result = mysqli_query($conn, "
     SELECT o.user_no, COALESCE(e.full_name,'') AS full_name,
            SUM(o.ot_hours) AS total_ot
@@ -395,6 +494,7 @@ tbody td.td-left { text-align:left; padding-left:16px; }
                         </div>
                         <button type="submit" class="btn btn-primary" style="align-self:flex-end;">&#128269; Search</button>
                         <a href="overtime_report.php" class="btn btn-gray" style="align-self:flex-end;">&#10005; Reset</a>
+                        <a href="?month=<?php echo htmlspecialchars($month); ?>&user_no=<?php echo htmlspecialchars($user_no); ?>&export=excel" class="btn btn-success" style="align-self:flex-end;">&#8659; Download Excel</a>
                     </div>
                 </form>
             </div>
