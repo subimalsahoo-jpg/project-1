@@ -1530,10 +1530,11 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $ot_amount = isset($emp['ot_amount']) && $emp['ot_amount'] !== ''
             ? (float)$emp['ot_amount']
             : ($regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount);
-        $late_salary_adjustment = $late_att_allowance_removed + ($stored_late_amount > 0 ? 0 : $late_amount);
-        $total_salary = isset($emp['total_salary']) && $emp['total_salary'] !== ''
-            ? max(0, (float)$emp['total_salary'] - $late_salary_adjustment)
-            : max(0, $salary_earned + $allowance_earned + $ot_amount + $att_allowance - $late_amount);
+        // Total salary is computed from the components shown in this row, so it
+        // always matches them. (Previously a saved total had the removed
+        // attendance-allowance / late subtracted again, double-counting the
+        // penalty when the record was generated with the absence already applied.)
+        $total_salary = max(0, $salary_earned + $allowance_earned + $ot_amount + $att_allowance - $late_amount);
         $gross_total = max(0, $total_salary + $gross_food_allowance);
         $total_deduction = isset($emp['total_deduction']) && $emp['total_deduction'] !== ''
             ? (float)$emp['total_deduction']
