@@ -494,7 +494,7 @@ tbody td.td-left { text-align:left; padding-left:16px; }
                         </div>
                         <button type="submit" class="btn btn-primary" style="align-self:flex-end;">&#128269; Search</button>
                         <a href="overtime_report.php" class="btn btn-gray" style="align-self:flex-end;">&#10005; Reset</a>
-                        <a href="?month=<?php echo htmlspecialchars($month); ?>&user_no=<?php echo htmlspecialchars($user_no); ?>&export=excel" class="btn btn-success" style="align-self:flex-end;">&#8659; Download Excel</a>
+                        <a href="overtime_report_print.php?month=<?php echo htmlspecialchars($month); ?>" target="_blank" rel="noopener" class="btn btn-success" style="align-self:flex-end;">&#128203; Full Report</a>
                     </div>
                 </form>
             </div>
