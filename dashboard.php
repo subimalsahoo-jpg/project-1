@@ -114,11 +114,26 @@ $three_months = date('Y-m-d', strtotime('+3 months'));
 $safe_today      = mysqli_real_escape_string($conn, $today);
 $safe_three_months = mysqli_real_escape_string($conn, $three_months);
 
+/* Visa alert = active (not resigned/left) employees whose visa is already
+   expired OR expiring within 3 months. Mirrors visa_expiring.php so the
+   dashboard count matches the report. Only filters on columns that exist. */
+$visa_active_filter = "";
+if ($status_col) {
+    $visa_active_filter .= " AND (`$status_col` IS NULL OR `$status_col`=''
+        OR LOWER(`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated'))";
+}
+if (isset($employee_columns_dashboard['resign_date'])) {
+    $visa_active_filter .= " AND (resign_date IS NULL OR resign_date='' OR resign_date='0000-00-00'
+        OR resign_date > '$safe_today')";
+}
+
 $visa_expire_count = safe_count($conn, "
     SELECT COUNT(*) AS total FROM employees
     WHERE visa_expiry_date IS NOT NULL
     AND visa_expiry_date != ''
-    AND visa_expiry_date BETWEEN '$safe_today' AND '$safe_three_months'
+    AND visa_expiry_date != '0000-00-00'
+    AND visa_expiry_date <= '$safe_three_months'
+    $visa_active_filter
 ");
 
 $totalvacationToday = 0;

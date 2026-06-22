@@ -16,12 +16,41 @@ function display_date_dmy($value) {
 $today = date('Y-m-d');
 $three_months = date('Y-m-d', strtotime('+3 months'));
 
+/* ─────────────────────────────────────────────
+   Exclude employees who have already resigned / left the company.
+   Their visa may still be valid, but they are no longer employed, so they
+   should not appear in this alert. The employees table schema is flexible,
+   so we detect the available status / resignation columns first and only
+   filter on the ones that exist (avoids SQL errors on older schemas).
+   "Left" = resign_date already passed, OR status marked resigned/inactive.
+───────────────────────────────────────────── */
+$emp_cols = [];
+$colRes = mysqli_query($conn, "SHOW COLUMNS FROM employees");
+if ($colRes) {
+    while ($c = mysqli_fetch_assoc($colRes)) { $emp_cols[$c['Field']] = true; }
+}
+$status_col = isset($emp_cols['employee_status'])
+    ? 'employee_status'
+    : (isset($emp_cols['status']) ? 'status' : null);
+
+$active_filter = "";
+if ($status_col) {
+    $active_filter .= " AND (`$status_col` IS NULL OR `$status_col`=''
+        OR LOWER(`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated'))";
+}
+if (isset($emp_cols['resign_date'])) {
+    $active_filter .= " AND (resign_date IS NULL OR resign_date='' OR resign_date='0000-00-00'
+        OR resign_date > '$today')";
+}
+
 $result = mysqli_query($conn,"
     SELECT *
     FROM employees
     WHERE visa_expiry_date IS NOT NULL
     AND visa_expiry_date != ''
-    AND visa_expiry_date BETWEEN '$today' AND '$three_months'
+    AND visa_expiry_date != '0000-00-00'
+    AND visa_expiry_date <= '$three_months'
+    $active_filter
     ORDER BY visa_expiry_date ASC
 ");
 $total_count = $result ? mysqli_num_rows($result) : 0;
@@ -31,7 +60,7 @@ $total_count = $result ? mysqli_num_rows($result) : 0;
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Visa Expiring Soon</title>
+<title>Expired &amp; Expiring Visas</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -222,6 +251,12 @@ tbody td.td-userno a:hover {
 }
 
 /* ── Urgency colouring ── */
+/* already expired: still employed, working on an expired visa */
+tr.urg-expired td { background: #fde0e0; }
+tr.urg-expired:nth-child(even) td { background: #fbd5d5; }
+tr.urg-expired .days-badge { background: var(--red-dark); color: #fff; }
+tr.urg-expired .date-cell  { color: var(--red-dark); font-weight: 800; }
+
 /* ≤ 7 days: critical red */
 tr.urg-critical td { background: #fff5f5; }
 tr.urg-critical:nth-child(even) td { background: #ffeded; }
@@ -282,7 +317,7 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
     </div>
     <div class="topbar-right">
         <?php if ($total_count > 0): ?>
-        <span class="count-pill">&#9888; <?php echo $total_count; ?> Visa<?php echo $total_count > 1 ? 's' : ''; ?> Expiring</span>
+        <span class="count-pill">&#9888; <?php echo $total_count; ?> Visa<?php echo $total_count > 1 ? 's' : ''; ?> to Action</span>
         <?php endif; ?>
         <button onclick="window.print()" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;">&#128438; Print</button>
     </div>
@@ -293,12 +328,16 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
     <!-- Heading -->
     <div class="page-heading">
         <div class="icon">&#128196;</div>
-        <h1>Visa Expiring Within 3 Months</h1>
+        <div>
+            <h1>Expired &amp; Expiring Visas</h1>
+            <p style="font-size:12px;color:var(--gray-600);margin-top:3px;">Already-expired visas of still-employed staff are included (e.g. renewal in progress or not yet entered). Resigned / left employees are excluded.</p>
+        </div>
     </div>
 
     <!-- Colour legend -->
     <?php if ($total_count > 0): ?>
     <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#b91c1c;"></span> Expired (still employed)</span>
         <span class="legend-item"><span class="legend-dot" style="background:#fca5a5;"></span> Critical (≤ 7 days)</span>
         <span class="legend-item"><span class="legend-dot" style="background:#fdba74;"></span> Urgent (8–14 days)</span>
         <span class="legend-item"><span class="legend-dot" style="background:#fde68a;"></span> Warning (15–30 days)</span>
@@ -327,7 +366,8 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
     if ($total_count > 0) {
         while ($row = mysqli_fetch_assoc($result)) {
             $remaining = floor((strtotime($row['visa_expiry_date']) - strtotime($today)) / 86400);
-            if ($remaining <= 7)       $urg = 'urg-critical';
+            if ($remaining < 0)        $urg = 'urg-expired';
+            elseif ($remaining <= 7)   $urg = 'urg-critical';
             elseif ($remaining <= 14)  $urg = 'urg-urgent';
             elseif ($remaining <= 30)  $urg = 'urg-warning';
             else                       $urg = 'urg-normal';
@@ -344,7 +384,13 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
         <td><?php echo h($row['phone']); ?></td>
         <td><?php echo h($row['emirates_id_number'] ?? ''); ?></td>
         <td class="date-cell"><?php echo h(display_date_dmy($row['visa_expiry_date'])); ?></td>
-        <td><span class="days-badge"><?php echo $remaining; ?> Days</span></td>
+        <td>
+            <?php if ($remaining < 0): ?>
+                <span class="days-badge">Expired <?php echo abs($remaining); ?>d ago</span>
+            <?php else: ?>
+                <span class="days-badge"><?php echo $remaining; ?> Days</span>
+            <?php endif; ?>
+        </td>
     </tr>
     <?php
         }
