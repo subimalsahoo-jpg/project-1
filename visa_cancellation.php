@@ -106,7 +106,7 @@ $is_print = isset($_GET['print']) && $_GET['print'] === '1';
 /* ── CSV / Excel export ──────────────────────────────────────────── */
 if (($_GET['export'] ?? '') === 'csv') {
     $headers = ['User No','Emp ID','Name','Passport No','Emirates ID','Nationality','Department','Designation','Company',
-        'Visa No','Visa Type','Visa Issue','Visa Expiry','Sponsor','Labour Card No',
+        'Emirates No','Visa Type','Visa Issue','Visa Expiry','Sponsor','Labour Card No',
         'Visa Cancel Date','Labour Card Cancel Date','Cancellation App No','Cancellation Status','Reason',
         'Last Working Day','Notice Start','Notice End','Basic Salary','Gratuity','Leave Encashment','Final Settlement','Settlement Status',
         'Exit Country Date','Air Ticket','Re-entry Eligible','Passport Returned','Emirates ID Returned','Assets Returned','Clearance','Remarks'];
@@ -122,7 +122,7 @@ if (($_GET['export'] ?? '') === 'csv') {
             vc_pick($r, ['user_no']), vc_pick($r, ['employee_id','card_no']), vc_pick($r, ['emp_name']),
             vc_pick($r, ['passport']), vc_pick($r, ['emirates_id_number']), vc_pick($r, ['nationality']),
             vc_pick($r, ['department']), vc_pick($r, ['designation']), $company,
-            vc_pick($r, ['visa_number']), vc_pick($r, ['visa_type']), vc_date_dmy(vc_pick($r, ['visa_issue_date'])),
+            vc_pick($r, ['emirates_number']), vc_pick($r, ['visa_type']), vc_date_dmy(vc_pick($r, ['visa_issue_date'])),
             vc_date_dmy(vc_pick($r, ['visa_expiry_date'])), vc_pick($r, ['visa_sponsor']), vc_pick($r, ['labour_card_number']),
             vc_date_dmy(vc_pick($r, ['visa_cancellation_date'])), vc_date_dmy(vc_pick($r, ['labour_card_cancellation_date'])),
             vc_pick($r, ['cancellation_application_number']), vc_pick($r, ['cancellation_status']), vc_pick($r, ['cancellation_reason']),
@@ -159,7 +159,7 @@ if ($can_edit && isset($_GET['edit'])) {
             // Pre-fill visa + settlement fields from the employee record.
             $rec = [
                 'user_no'          => $new_user,
-                'visa_number'      => vc_pick($form_employee, ['visa_id_number']),
+                'emirates_number'  => vc_pick($form_employee, ['emirates_id_number']),
                 'visa_issue_date'  => vc_pick($form_employee, ['visa_issuing_date']),
                 'visa_expiry_date' => vc_pick($form_employee, ['visa_expiry_date']),
                 'labour_card_number' => vc_pick($form_employee, ['uid_number']),
@@ -353,7 +353,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
 
                 <fieldset><legend>Visa Details</legend>
                     <div class="grid">
-                        <div class="fgroup"><label>Visa Number</label><input type="text" name="visa_number" value="<?php echo vh(rv($rec,'visa_number')); ?>"></div>
+                        <div class="fgroup"><label>Emirates Number</label><input type="text" name="emirates_number" value="<?php echo vh(rv($rec,'emirates_number')); ?>"></div>
                         <div class="fgroup"><label>Visa Type</label><select name="visa_type"><option value="">—</option><?php foreach (vc_visa_types() as $t): ?><option value="<?php echo $t; ?>" <?php echo rv($rec,'visa_type')===$t?'selected':''; ?>><?php echo $t; ?></option><?php endforeach; ?></select></div>
                         <div class="fgroup"><label>Visa Issue Date</label><input type="date" name="visa_issue_date" value="<?php echo vh(rv($rec,'visa_issue_date')); ?>"></div>
                         <div class="fgroup"><label>Visa Expiry Date</label><input type="date" name="visa_expiry_date" value="<?php echo vh(rv($rec,'visa_expiry_date')); ?>"></div>
@@ -419,7 +419,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
         <table>
             <thead>
                 <tr>
-                    <th>SL</th><th>User No</th><th>Name</th><th>Passport No</th><th>Visa No</th>
+                    <th>SL</th><th>User No</th><th>Name</th><th>Passport No</th><th>Emirates No</th>
                     <th>Visa Expiry</th><th>Cancel Date</th><th>Last Working Day</th><th>Reason</th>
                     <th>Status</th><th class="num">Gratuity</th><th class="num">Final Settlement</th>
                     <?php if (!$is_print): ?><th class="actions-col">Actions</th><?php endif; ?>
@@ -436,7 +436,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
                     <td><strong><?php echo vh(vc_pick($r,['user_no'])); ?></strong></td>
                     <td><?php echo vh(vc_pick($r,['emp_name'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vh(vc_pick($r,['passport'])) ?: '<span class="muted">—</span>'; ?></td>
-                    <td><?php echo vh(vc_pick($r,['visa_number'])) ?: '<span class="muted">—</span>'; ?></td>
+                    <td><?php echo vh(vc_pick($r,['emirates_number'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['visa_expiry_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['visa_cancellation_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['last_working_date'])) ?: '<span class="muted">—</span>'; ?></td>

@@ -80,7 +80,7 @@ if (!function_exists('vc_ensure_schema')) {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_no VARCHAR(50) NOT NULL,
                 -- Visa details (snapshot, editable)
-                visa_number VARCHAR(100) DEFAULT '',
+                emirates_number VARCHAR(100) DEFAULT '',
                 visa_type VARCHAR(50) DEFAULT '',
                 visa_issue_date DATE NULL,
                 visa_expiry_date DATE NULL,
@@ -119,6 +119,13 @@ if (!function_exists('vc_ensure_schema')) {
                 INDEX idx_canceldate (visa_cancellation_date)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+
+        // Upgrade older tables that were created with the legacy visa_number
+        // column: add emirates_number if it is missing.
+        $cols = vc_table_columns($conn, 'visa_cancellations');
+        if (!isset($cols['emirates_number'])) {
+            mysqli_query($conn, "ALTER TABLE visa_cancellations ADD COLUMN emirates_number VARCHAR(100) DEFAULT '' AFTER user_no");
+        }
     }
 }
 
@@ -181,7 +188,7 @@ if (!function_exists('vc_build_where')) {
         if (!empty($f['search'])) {
             $s = $esc($f['search']);
             $namecol = vc_employee_name_col($conn);
-            $where[] = "(vc.user_no LIKE '%$s%' OR e.`$namecol` LIKE '%$s%' OR vc.visa_number LIKE '%$s%')";
+            $where[] = "(vc.user_no LIKE '%$s%' OR e.`$namecol` LIKE '%$s%' OR vc.emirates_number LIKE '%$s%')";
         }
         return implode(' AND ', $where);
     }
@@ -247,7 +254,7 @@ if (!function_exists('vc_editable_fields')) {
     /* Field => bind-type for insert/update (excludes id/user_no/timestamps). */
     function vc_editable_fields() {
         return [
-            'visa_number' => 's', 'visa_type' => 's', 'visa_issue_date' => 'date',
+            'emirates_number' => 's', 'visa_type' => 's', 'visa_issue_date' => 'date',
             'visa_expiry_date' => 'date', 'visa_sponsor' => 's', 'labour_card_number' => 's',
             'visa_cancellation_date' => 'date', 'labour_card_cancellation_date' => 'date',
             'cancellation_application_number' => 's', 'cancellation_status' => 's',
