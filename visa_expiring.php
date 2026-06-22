@@ -17,6 +17,7 @@ function display_date_dmy($value) {
 $today = date('Y-m-d');
 $three_months = visa_alert_window_date();
 
+$result = visa_alert_query($conn);
 $total_count = $result ? mysqli_num_rows($result) : 0;
 ?>
 <!DOCTYPE html>
