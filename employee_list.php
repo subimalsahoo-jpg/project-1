@@ -1,6 +1,7 @@
 <?php
 include 'auth.php';
 requirePermission('employee_view');
+include_once 'visa_helper.php';
 
 function esc($conn, $value) {
     return mysqli_real_escape_string($conn, trim((string)$value));
@@ -201,15 +202,7 @@ if (isset($employee_columns['nationality'])) {
 }
 
 $today = date('Y-m-d');
-$two_months = date('Y-m-d', strtotime('+2 months'));
-$visa_expire_result = mysqli_query($conn, "
-    SELECT *
-    FROM employees
-    WHERE visa_expiry_date IS NOT NULL
-    AND visa_expiry_date != ''
-    AND visa_expiry_date BETWEEN '$today' AND '$two_months'
-    ORDER BY visa_expiry_date ASC
-");
+$visa_expire_result = visa_alert_query($conn);
 $visa_expire_count = $visa_expire_result ? mysqli_num_rows($visa_expire_result) : 0;
 
 $fields = [
@@ -722,7 +715,7 @@ table{width:100%;}
             $status = 'Resigned';
         }
         $visa_expiry = value_from($row, ['visa_expiry_date']);
-        $is_visa_warning = $visa_expiry !== '' && $visa_expiry >= $today && $visa_expiry <= $two_months;
+        $is_visa_warning = $visa_expiry !== '' && $visa_expiry !== '0000-00-00' && $visa_expiry <= visa_alert_window_date();
         $edit_user_no = value_from($row, ['user_no']);
     ?>
     <tr>
@@ -805,12 +798,12 @@ table{width:100%;}
                 <td><?php echo h(value_from($v, ['phone', 'phone_number_uae'])); ?></td>
                 <td><?php echo h(value_from($v, ['visa_id_number', 'emirates_id_number'])); ?></td>
                 <td class="visa-warning"><?php echo h(display_date_dmy(value_from($v, ['visa_expiry_date']))); ?></td>
-                <td><?php echo $remaining_days; ?> Days</td>
+                <td><?php if ($remaining_days < 0): ?>Expired <?php echo abs($remaining_days); ?>d ago<?php else: ?><?php echo $remaining_days; ?> Days<?php endif; ?></td>
             </tr>
             <?php } } else { ?>
             <tr>
                 <td colspan="9" style="text-align:center;color:#16a34a;font-weight:600;padding:24px;">
-                    &#10003; No visa expiry within 2 months.
+                    &#10003; No visa alerts (expired or expiring soon).
                 </td>
             </tr>
             <?php } ?>

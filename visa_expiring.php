@@ -1,6 +1,7 @@
 <?php
 include 'auth.php';
 requirePermission('employee_view');
+include_once 'visa_helper.php';
 
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -14,45 +15,12 @@ function display_date_dmy($value) {
 }
 
 $today = date('Y-m-d');
-$three_months = date('Y-m-d', strtotime('+3 months'));
+$three_months = visa_alert_window_date();
 
-/* ─────────────────────────────────────────────
-   Exclude employees who have already resigned / left the company.
-   Their visa may still be valid, but they are no longer employed, so they
-   should not appear in this alert. The employees table schema is flexible,
-   so we detect the available status / resignation columns first and only
-   filter on the ones that exist (avoids SQL errors on older schemas).
-   "Left" = resign_date already passed, OR status marked resigned/inactive.
-───────────────────────────────────────────── */
-$emp_cols = [];
-$colRes = mysqli_query($conn, "SHOW COLUMNS FROM employees");
-if ($colRes) {
-    while ($c = mysqli_fetch_assoc($colRes)) { $emp_cols[$c['Field']] = true; }
-}
-$status_col = isset($emp_cols['employee_status'])
-    ? 'employee_status'
-    : (isset($emp_cols['status']) ? 'status' : null);
-
-$active_filter = "";
-if ($status_col) {
-    $active_filter .= " AND (`$status_col` IS NULL OR `$status_col`=''
-        OR LOWER(`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated'))";
-}
-if (isset($emp_cols['resign_date'])) {
-    $active_filter .= " AND (resign_date IS NULL OR resign_date='' OR resign_date='0000-00-00'
-        OR resign_date > '$today')";
-}
-
-$result = mysqli_query($conn,"
-    SELECT *
-    FROM employees
-    WHERE visa_expiry_date IS NOT NULL
-    AND visa_expiry_date != ''
-    AND visa_expiry_date != '0000-00-00'
-    AND visa_expiry_date <= '$three_months'
-    $active_filter
-    ORDER BY visa_expiry_date ASC
-");
+/* Active (not resigned/left) employees whose visa is already expired or
+   expiring within the alert window. Shared logic lives in visa_helper.php
+   so the dashboard, employee list, and this report always agree. */
+$result = visa_alert_query($conn);
 $total_count = $result ? mysqli_num_rows($result) : 0;
 ?>
 <!DOCTYPE html>
