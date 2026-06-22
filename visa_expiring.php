@@ -17,10 +17,6 @@ function display_date_dmy($value) {
 $today = date('Y-m-d');
 $three_months = visa_alert_window_date();
 
-/* Active (not resigned/left) employees whose visa is already expired or
-   expiring within the alert window. Shared logic lives in visa_helper.php
-   so the dashboard, employee list, and this report always agree. */
-$result = visa_alert_query($conn);
 $total_count = $result ? mysqli_num_rows($result) : 0;
 ?>
 <!DOCTYPE html>
@@ -297,8 +293,6 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
     <div class="page-heading">
         <div class="icon">&#128196;</div>
         <div>
-            <h1>Expired &amp; Expiring Visas</h1>
-            <p style="font-size:12px;color:var(--gray-600);margin-top:3px;">Already-expired visas of still-employed staff are included (e.g. renewal in progress or not yet entered). Resigned / left employees are excluded.</p>
         </div>
     </div>
 

@@ -103,6 +103,7 @@ body { padding-left: 250px; }
         <?php endif; ?>
         <?php if (hasPermission('salary_generate')): ?>
         <a href="advance_manage.php" class="<?php echo appnav_active('advance_manage.php'); ?>">&#128184; Advance Salary</a>
+        <a href="wps_sif.php" class="<?php echo appnav_active('wps_sif.php'); ?>">&#127974; WPS / SIF File</a>
         <?php endif; ?>
         <?php if (hasPermission('salary_slip_print')): ?>
         <a href="salary_slip.php" class="<?php echo appnav_active('salary_slip.php'); ?>">&#129534; Salary Slip</a>
@@ -112,6 +113,7 @@ body { padding-left: 250px; }
         <?php endif; ?>
         <?php if (hasPermission('reports_view')): ?>
         <a href="overtime_report.php" class="<?php echo appnav_active('overtime_report.php'); ?>">&#9203; Overtime Report</a>
+        <a href="gratuity_report.php" class="<?php echo appnav_active('gratuity_report.php'); ?>">&#128176; Gratuity Report</a>
         <a href="visa_expiring.php" class="<?php echo appnav_active('visa_expiring.php'); ?>">&#9888; Visa Expire</a>
         <a href="insurance_expiring.php" class="<?php echo appnav_active('insurance_expiring.php'); ?>">&#128737; Insurance Expire</a>
         <?php endif; ?>
