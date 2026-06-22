@@ -16,12 +16,40 @@ function display_date_dmy($value) {
 $today = date('Y-m-d');
 $three_months = date('Y-m-d', strtotime('+3 months'));
 
+/* ─────────────────────────────────────────────
+   Exclude employees who have already resigned / left the company.
+   Their visa may still be valid, but they are no longer employed, so they
+   should not appear in this alert. The employees table schema is flexible,
+   so we detect the available status / resignation columns first and only
+   filter on the ones that exist (avoids SQL errors on older schemas).
+   "Left" = resign_date already passed, OR status marked resigned/inactive.
+───────────────────────────────────────────── */
+$emp_cols = [];
+$colRes = mysqli_query($conn, "SHOW COLUMNS FROM employees");
+if ($colRes) {
+    while ($c = mysqli_fetch_assoc($colRes)) { $emp_cols[$c['Field']] = true; }
+}
+$status_col = isset($emp_cols['employee_status'])
+    ? 'employee_status'
+    : (isset($emp_cols['status']) ? 'status' : null);
+
+$active_filter = "";
+if ($status_col) {
+    $active_filter .= " AND (`$status_col` IS NULL OR `$status_col`=''
+        OR LOWER(`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated'))";
+}
+if (isset($emp_cols['resign_date'])) {
+    $active_filter .= " AND (resign_date IS NULL OR resign_date='' OR resign_date='0000-00-00'
+        OR resign_date > '$today')";
+}
+
 $result = mysqli_query($conn,"
     SELECT *
     FROM employees
     WHERE visa_expiry_date IS NOT NULL
     AND visa_expiry_date != ''
     AND visa_expiry_date BETWEEN '$today' AND '$three_months'
+    $active_filter
     ORDER BY visa_expiry_date ASC
 ");
 $total_count = $result ? mysqli_num_rows($result) : 0;
@@ -293,7 +321,10 @@ tr.urg-normal .date-cell  { color: var(--gray-600); }
     <!-- Heading -->
     <div class="page-heading">
         <div class="icon">&#128196;</div>
-        <h1>Visa Expiring Within 3 Months</h1>
+        <div>
+            <h1>Visa Expiring Within 3 Months</h1>
+            <p style="font-size:12px;color:var(--gray-600);margin-top:3px;">Resigned / left employees are excluded.</p>
+        </div>
     </div>
 
     <!-- Colour legend -->
