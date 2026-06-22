@@ -1,6 +1,7 @@
 <?php
 include 'auth.php';
 requirePermission('dashboard_view');
+include_once 'visa_helper.php';
 
 $loggedInName = trim((string)($_SESSION['full_name'] ?? ''));
 $loggedInUser = trim((string)($_SESSION['username'] ?? ''));
@@ -114,12 +115,10 @@ $three_months = date('Y-m-d', strtotime('+3 months'));
 $safe_today      = mysqli_real_escape_string($conn, $today);
 $safe_three_months = mysqli_real_escape_string($conn, $three_months);
 
-$visa_expire_count = safe_count($conn, "
-    SELECT COUNT(*) AS total FROM employees
-    WHERE visa_expiry_date IS NOT NULL
-    AND visa_expiry_date != ''
-    AND visa_expiry_date BETWEEN '$safe_today' AND '$safe_three_months'
-");
+/* Visa alert count — shared logic (visa_helper.php): active (not
+   resigned/left) employees whose visa is already expired or expiring
+   within 3 months. Keeps the dashboard, employee list, and report in sync. */
+$visa_expire_count = visa_alert_count($conn);
 
 $totalvacationToday = 0;
 $vacationCheck = mysqli_query($conn, "SHOW TABLES LIKE 'vacations'");
