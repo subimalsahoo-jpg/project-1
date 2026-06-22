@@ -108,8 +108,6 @@ $totalSalary = $salary_q ? (float)(mysqli_fetch_assoc($salary_q)['total'] ?? 0) 
    Other counts
 ───────────────────────────────────────────── */
 $totalHolidays   = safe_count($conn, "SELECT COUNT(*) AS total FROM holidays");
-$totalAttendance = safe_count($conn, "SELECT COUNT(*) AS total FROM attendance");
-
 $today      = date('Y-m-d');
 $three_months = date('Y-m-d', strtotime('+3 months'));
 $safe_today      = mysqli_real_escape_string($conn, $today);
@@ -1034,12 +1032,6 @@ body {
                 <p>&#128181; <?php echo $previousMonthName; ?> Net Salary</p>
             </div>
         </a>
-
-        <div class="card">
-            <h1><?php echo number_format($totalAttendance); ?></h1>
-            <p>&#128337; Attendance Records</p>
-        </div>
-
         <a href="holidays.php" class="card-link">
             <div class="card">
                 <h1><?php echo number_format($totalHolidays); ?></h1>
