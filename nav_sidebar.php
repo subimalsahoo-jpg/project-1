@@ -103,6 +103,7 @@ body { padding-left: 250px; }
         <?php endif; ?>
         <?php if (hasPermission('salary_generate')): ?>
         <a href="advance_manage.php" class="<?php echo appnav_active('advance_manage.php'); ?>">&#128184; Advance Salary</a>
+        <a href="wps_sif.php" class="<?php echo appnav_active('wps_sif.php'); ?>">&#127974; WPS / SIF File</a>
         <?php endif; ?>
         <?php if (hasPermission('salary_slip_print')): ?>
         <a href="salary_slip.php" class="<?php echo appnav_active('salary_slip.php'); ?>">&#129534; Salary Slip</a>
