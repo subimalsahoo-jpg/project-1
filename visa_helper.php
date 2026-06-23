@@ -103,3 +103,25 @@ if (!function_exists('visa_alert_count')) {
         return (int)(mysqli_fetch_assoc($res)['total'] ?? 0);
     }
 }
+
+
+if (!function_exists('visa_expired_list')) {
+    /* Active (not resigned/left) employees whose visa has ALREADY expired —
+       used for the dashboard's scrolling red reminder ribbon. */
+    function visa_expired_list($conn) {
+        $today = date('Y-m-d');
+        $filter = visa_active_employee_filter($conn, $today);
+        $rows = [];
+        $res = mysqli_query($conn, "
+            SELECT * FROM employees
+            WHERE visa_expiry_date IS NOT NULL
+            AND visa_expiry_date != ''
+            AND visa_expiry_date != '0000-00-00'
+            AND visa_expiry_date < '$today'
+            $filter
+            ORDER BY visa_expiry_date ASC
+        ");
+        if ($res) { while ($r = mysqli_fetch_assoc($res)) { $rows[] = $r; } }
+        return $rows;
+    }
+}

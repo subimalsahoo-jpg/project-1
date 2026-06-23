@@ -117,6 +117,7 @@ $safe_three_months = mysqli_real_escape_string($conn, $three_months);
    resigned/left) employees whose visa is already expired or expiring
    within 3 months. Keeps the dashboard, employee list, and report in sync. */
 $visa_expire_count = visa_alert_count($conn);
+$expired_visas = visa_expired_list($conn);
 
 $totalvacationToday = 0;
 $vacationCheck = mysqli_query($conn, "SHOW TABLES LIKE 'vacations'");
@@ -445,6 +446,18 @@ body {
 .topbar small { color: #64748b; font-size: 13px; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Expired-visa reminder ribbon ── */
+.visa-ribbon{display:flex;align-items:stretch;background:#b91c1c;color:#fff;border-radius:10px;margin:0 0 20px;overflow:hidden;box-shadow:0 3px 12px rgba(185,28,28,.35);}
+.visa-ribbon-label{flex:0 0 auto;display:flex;align-items:center;background:#7f1414;padding:0 16px;font-weight:800;font-size:13px;letter-spacing:.6px;white-space:nowrap;}
+.visa-ribbon-track{flex:1;overflow:hidden;position:relative;}
+.visa-ribbon-content{display:inline-flex;align-items:center;white-space:nowrap;padding:11px 0;will-change:transform;animation:visaRibbonScroll 45s linear infinite;}
+.visa-ribbon:hover .visa-ribbon-content{animation-play-state:paused;}
+.visa-ribbon-item{padding:0 14px;font-size:13.5px;font-weight:600;}
+.visa-ribbon-item b{color:#ffe08a;font-weight:800;}
+.visa-ribbon-sep{color:rgba(255,255,255,.45);font-size:9px;}
+@keyframes visaRibbonScroll{ from{transform:translateX(-50%);} to{transform:translateX(0);} }
+@media (prefers-reduced-motion: reduce){ .visa-ribbon-content{animation:none;} }
 
 .user-badge {
     display: flex;
@@ -927,6 +940,35 @@ body {
             <a href="logout.php" class="btn-logout">&#128682; Logout</a>
         </div>
     </div>
+
+    <?php if (!empty($expired_visas)): ?>
+    <!-- ── Expired-visa reminder ribbon (continuous scroll) ── -->
+    <div class="visa-ribbon" title="Employees working on an already-expired visa">
+        <span class="visa-ribbon-label">&#9888; VISA EXPIRED</span>
+        <div class="visa-ribbon-track">
+            <div class="visa-ribbon-content">
+                <?php
+                $__today_ts = strtotime(date('Y-m-d'));
+                for ($__r = 0; $__r < 2; $__r++) { // duplicated for a seamless loop
+                    foreach ($expired_visas as $__v) {
+                        $__exp = $__v['visa_expiry_date'] ?? '';
+                        $__days = $__exp ? (int)floor(($__today_ts - strtotime($__exp)) / 86400) : 0;
+                        $__name = htmlspecialchars((string)($__v['full_name'] ?? $__v['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__uno  = htmlspecialchars((string)($__v['user_no'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__dept = htmlspecialchars((string)($__v['department'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__expd = $__exp ? date('d-m-Y', strtotime($__exp)) : '';
+                        echo '<span class="visa-ribbon-item">&#128100; <b>' . $__name . '</b> (' . $__uno . ')'
+                           . ($__dept !== '' ? ' &middot; ' . $__dept : '')
+                           . ' &mdash; Visa expired <b>' . $__expd . '</b>'
+                           . ($__days > 0 ? ' (' . $__days . ' day' . ($__days > 1 ? 's' : '') . ' ago)' : '')
+                           . '</span><span class="visa-ribbon-sep">&#9679;</span>';
+                    }
+                }
+                ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- ── Stat Cards ── -->
     <div class="cards">
