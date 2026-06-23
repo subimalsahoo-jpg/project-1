@@ -53,7 +53,7 @@ if (!function_exists('visa_active_employee_filter')) {
         $filter = '';
         if ($status_col) {
             $filter .= " AND ({$p}`$status_col` IS NULL OR {$p}`$status_col`=''"
-                     . " OR LOWER({$p}`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated'))";
+                     . " OR LOWER({$p}`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated','absconding','end of contract'))";
         }
         if (isset($cols['resign_date'])) {
             $filter .= " AND ({$p}resign_date IS NULL OR {$p}resign_date='' OR {$p}resign_date='0000-00-00'"

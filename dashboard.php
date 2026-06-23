@@ -51,7 +51,7 @@ if ($status_col) {
     $total_employee_condition .= " AND (
         `$status_col` IS NULL
         OR `$status_col`=''
-        OR LOWER(`$status_col`) NOT IN ('resign', 'resigned')
+        OR LOWER(`$status_col`) NOT IN ('resign', 'resigned', 'absconding', 'terminated', 'end of contract')
     )";
 }
 if (isset($employee_columns_dashboard['resign_date'])) {
