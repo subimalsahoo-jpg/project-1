@@ -12,7 +12,7 @@
 ───────────────────────────────────────────── */
 include 'auth.php';
 include_once 'gratuity_helper.php';
-requirePermission('reports_view');
+requireAnyPermission(['reports_view','gratuity_view']);
 
 if (!function_exists('money')) {
     function money($amount) { return number_format((float)$amount, 2); }

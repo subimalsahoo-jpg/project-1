@@ -1,6 +1,6 @@
 <?php
 include 'auth.php';
-requirePermission('employee_view');
+requireAnyPermission(['employee_view','visa_insurance_view']);
 
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');

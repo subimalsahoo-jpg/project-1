@@ -128,7 +128,8 @@ $users = mysqli_query($conn, "SELECT id, username, full_name, role, status, crea
 <head>
     <title>User Management</title>
     <style>
-        body{font-family:Arial;background:#f4f6f9;margin:0;padding:24px;color:#111827;}
+        body{font-family:Arial;background:#f4f6f9;margin:0;padding:24px 24px 24px 274px;color:#111827;}
+        @media(max-width:860px){ body{ padding-left:24px; } }
         .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
         .btn,button{background:#2d9cdb;color:white;border:0;padding:9px 14px;border-radius:4px;text-decoration:none;cursor:pointer;font-weight:bold;}
         .dark{background:#23364d;}

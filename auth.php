@@ -153,6 +153,12 @@ function permission_definitions() {
         'salary_view' => 'Salary Sheet View',
         'salary_generate' => 'Salary Generate',
         'salary_slip_print' => 'Salary Slip Print',
+        'advance_manage' => 'Advance Salary',
+        'overtime_view' => 'Overtime Report',
+        'gratuity_view' => 'Gratuity Report',
+        'wps_manage' => 'WPS / SIF File',
+        'visa_cancellation_manage' => 'Visa Cancellation',
+        'visa_insurance_view' => 'Visa & Insurance Expiry',
         'vacation_manage' => 'Vacation Manage',
         'reports_view' => 'Reports View',
         'uploads_manage' => 'Uploads Manage',
@@ -173,18 +179,20 @@ function role_permissions($role) {
         'hr' => [
             'dashboard_view', 'employee_view', 'employee_add',
             'attendance_report', 'vacation_manage', 'reports_view',
+            'overtime_view', 'gratuity_view', 'visa_cancellation_manage', 'visa_insurance_view',
         ],
         'salary' => [
             'dashboard_view', 'employee_view', 'salary_view',
             'salary_generate', 'salary_slip_print', 'reports_view',
+            'advance_manage', 'overtime_view', 'gratuity_view', 'wps_manage',
         ],
         'attendance' => [
             'dashboard_view', 'employee_view', 'attendance_report',
-            'attendance_upload', 'reports_view',
+            'attendance_upload', 'reports_view', 'overtime_view',
         ],
         'viewer' => [
             'dashboard_view', 'employee_view', 'attendance_report',
-            'salary_view', 'reports_view',
+            'salary_view', 'reports_view', 'overtime_view', 'gratuity_view', 'visa_insurance_view',
         ],
     ];
 
@@ -247,6 +255,22 @@ function requirePermission($permission) {
         echo "<p style='font-family:Arial;text-align:center;'>You do not have permission to open this page.</p>";
         exit();
     }
+}
+
+/* Allow access if the user has ANY of the given permissions (used so a
+   specific report permission OR its broader umbrella both grant access,
+   keeping older grants working while enabling finer-grained control). */
+function requireAnyPermission(array $permissions) {
+    requireLogin();
+    foreach ($permissions as $permission) {
+        if (hasPermission($permission)) {
+            return;
+        }
+    }
+    http_response_code(403);
+    echo "<h2 style='font-family:Arial;color:#c0392b;text-align:center;margin-top:60px;'>Access Denied</h2>";
+    echo "<p style='font-family:Arial;text-align:center;'>You do not have permission to open this page.</p>";
+    exit();
 }
 
 function login_user($conn, $username, $password) {
