@@ -116,6 +116,15 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename=visa_cancellation_report_' . date('Y_m_d') . '.csv');
     header('Pragma: no-cache'); header('Expires: 0');
     echo "\xEF\xBB\xBF";
+    // Summary block (respects the active filters)
+    echo implode(',', array_map($cell, ['Visa Cancellation Report', $company])) . "\r\n";
+    echo implode(',', array_map($cell, ['Generated', date('d-m-Y H:i')])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Cancellations', $summary['total']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Pending / Submitted', $summary['pending']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Completed', $summary['completed']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Gratuity Payable (AED)', money($summary['total_gratuity'])])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Final Settlement (AED)', money($summary['total_settlement'])])) . "\r\n";
+    echo "\r\n";
     echo implode(',', array_map($cell, $headers)) . "\r\n";
     foreach ($rows as $r) {
         $line = [
@@ -156,6 +165,18 @@ if ($can_edit && isset($_GET['edit'])) {
     if ($new_user !== '') {
         $form_employee = vc_get_employee($conn, $new_user);
         if ($form_employee) {
+            // Map the employee's status to a default cancellation reason.
+            $emp_status = strtolower(trim((string)vc_pick($form_employee, ['employee_status', 'status'])));
+            $reason_map = [
+                'resign' => 'Resignation', 'resigned' => 'Resignation',
+                'terminated' => 'Termination', 'absconding' => 'Absconding',
+                'end of contract' => 'End of Contract',
+            ];
+            $default_reason = $reason_map[$emp_status] ?? '';
+            // A past resign_date with no specific exit status still implies resignation.
+            if ($default_reason === '' && trim((string)vc_pick($form_employee, ['resign_date'])) !== '') {
+                $default_reason = 'Resignation';
+            }
             // Pre-fill visa + settlement fields from the employee record.
             $rec = [
                 'user_no'          => $new_user,
@@ -167,6 +188,7 @@ if ($can_edit && isset($_GET['edit'])) {
                 'last_working_date'=> vc_pick($form_employee, ['resign_date']),
                 'visa_type'        => 'Employment',
                 'cancellation_status' => 'Pending',
+                'cancellation_reason' => $default_reason,
                 'settlement_status'   => 'Pending',
                 'clearance_status'    => 'Pending',
                 're_entry_eligible'   => 1,
@@ -288,6 +310,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
         <div class="stat amber"><div class="label">Pending / Submitted</div><div class="value"><?php echo (int)$summary['pending']; ?></div></div>
         <div class="stat green"><div class="label">Completed</div><div class="value"><?php echo (int)$summary['completed']; ?></div></div>
         <div class="stat gray"><div class="label">Total Gratuity Payable</div><div class="value" style="font-size:17px;">AED <?php echo money($summary['total_gratuity']); ?></div></div>
+        <div class="stat green"><div class="label">Total Final Settlement</div><div class="value" style="font-size:17px;">AED <?php echo money($summary['total_settlement']); ?></div></div>
     </div>
 
     <?php if (!$is_print): ?>
@@ -441,19 +464,23 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
                     <td><?php echo vc_date_dmy(vc_pick($r,['visa_cancellation_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['last_working_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vh(vc_pick($r,['cancellation_reason'])) ?: '<span class="muted">—</span>'; ?></td>
-                    <td><span class="pill" style="background:<?php echo $bg; ?>;color:<?php echo $fg; ?>;"><?php echo vh(vc_pick($r,['cancellation_status'])); ?></span></td>
+                    <td><span class="pill" style="background:<?php echo $bg; ?>;color:<?php echo $fg; ?>;"><?php echo vh(vc_pick($r,['cancellation_status'])); ?></span><?php if (!empty($r['_virtual'])): ?> <span class="pill" style="background:#fde68a;color:#92400e;" title="Resigned employee — file not opened yet">Resigned · to process</span><?php endif; ?></td>
                     <td class="num"><?php echo money(vc_pick($r,['gratuity_amount'],0)); ?></td>
                     <td class="num"><?php echo money(vc_pick($r,['final_settlement_amount'],0)); ?></td>
                     <?php if (!$is_print): ?>
                     <td class="actions-col">
                         <div style="display:flex;gap:5px;">
-                            <a class="btn btn-gray btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>edit=<?php echo (int)$r['id']; ?>"><?php echo $can_edit ? 'Edit' : 'View'; ?></a>
-                            <?php if ($can_edit): ?>
-                            <form method="POST" onsubmit="return confirm('Delete this cancellation record?');" style="display:inline;">
-                                <input type="hidden" name="action" value="delete">
-                                <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
-                                <button type="submit" class="btn btn-danger btn-sm">Del</button>
-                            </form>
+                            <?php if (!empty($r['_virtual'])): ?>
+                                <a class="btn btn-success btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>new=1&user_no=<?php echo urlencode((string)vc_pick($r,['user_no'])); ?>"><?php echo $can_edit ? 'Process &amp; Close' : 'View'; ?></a>
+                            <?php else: ?>
+                                <a class="btn btn-gray btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>edit=<?php echo (int)$r['id']; ?>"><?php echo $can_edit ? 'Edit' : 'View'; ?></a>
+                                <?php if ($can_edit): ?>
+                                <form method="POST" onsubmit="return confirm('Delete this cancellation record?');" style="display:inline;">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
+                                    <button type="submit" class="btn btn-danger btn-sm">Del</button>
+                                </form>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </td>
