@@ -20,6 +20,7 @@
 ───────────────────────────────────────────── */
 include 'auth.php';
 requirePermission('attendance_upload');
+include_once 'vacation_helper.php';
 
 function sd_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 function sd_esc($conn, $v) { return mysqli_real_escape_string($conn, (string)$v); }
@@ -67,6 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     $off_date  = $off_raw  !== '' ? normalize_input_date($off_raw)  : '';
     $work_date = $work_raw !== '' ? normalize_input_date($work_raw) : '';
 
+    // User Nos who were ABSENT on the work day (won't be marked present;
+    // each gets a 1-day unpaid leave => one-day deduction).
+    $absent_raw  = trim($_POST['absent_users'] ?? '');
+    $absent_list = array_values(array_filter(array_map('trim', preg_split('/[\s,;]+/', $absent_raw))));
+    $absent_set  = array_flip($absent_list);
+
     if ($off_date === '' && $work_date === '') {
         $flash = 'Please provide at least an Off day or a Work day.';
         $flash_type = 'err';
@@ -106,6 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             $note = sd_esc($conn, $reason !== '' ? $reason : 'Worked day swap (no punch) — marked present');
             if ($emp_q) {
                 while ($e = mysqli_fetch_assoc($emp_q)) {
+                    // Skip employees marked absent on the work day.
+                    if (isset($absent_set[(string)$e['user_no']])) { continue; }
                     $uno = sd_esc($conn, $e['user_no']);
                     $ename = sd_esc($conn, $e['emp_name']);
                     $row = mysqli_query($conn, "SELECT id, check_in FROM attendance WHERE user_no='$uno' AND attendance_date='$wd' LIMIT 1");
@@ -136,6 +145,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             }
             $result_lines[] = "Work day " . date('d-M-Y', strtotime($work_date)) . ": marked $marked employee(s) present"
                 . ($already > 0 ? " ($already already had a punch — left unchanged)" : "") . ".";
+
+            // ── Absent on the work day -> 1-day unpaid leave (one-day deduction) ──
+            if (!empty($absent_list)) {
+                if (function_exists('vacation_ensure_schema')) { vacation_ensure_schema($conn); }
+                $vreason = sd_esc($conn, $reason !== '' ? $reason : 'Absent on compensatory work day');
+                $absent_done = 0; $absent_skipped = 0;
+                foreach ($absent_list as $au) {
+                    $auno = sd_esc($conn, $au);
+                    $eq = mysqli_query($conn, "SELECT `$name_col` AS emp_name FROM employees WHERE user_no='$auno' LIMIT 1");
+                    if (!$eq || mysqli_num_rows($eq) === 0) { $absent_skipped++; continue; }
+                    $en = sd_esc($conn, mysqli_fetch_assoc($eq)['emp_name']);
+                    // Don't double-add if a leave already covers the work date.
+                    $vex = mysqli_query($conn, "SELECT id FROM vacations WHERE user_no='$auno' AND '$wd' BETWEEN from_date AND to_date LIMIT 1");
+                    if ($vex && mysqli_num_rows($vex) > 0) { $absent_skipped++; continue; }
+                    mysqli_query($conn, "
+                        INSERT INTO vacations
+                            (user_no, employee_name, from_date, to_date, return_date, leave_type, paid_status, vacation_status, reason)
+                        VALUES
+                            ('$auno', '$en', '$wd', '$wd', '$wd', 'Unpaid', 'Unpaid', 'Closed', '$vreason')
+                    ");
+                    $absent_done++;
+                }
+                $result_lines[] = "Absent on work day: applied a 1-day unpaid leave (one-day deduction) to $absent_done employee(s)"
+                    . ($absent_skipped > 0 ? " ($absent_skipped skipped — unknown user or already on leave)" : "") . ".";
+            }
         }
 
         $flash = 'Swap applied. Now regenerate the affected month\'s salary.';
@@ -247,6 +281,13 @@ th{background:var(--gray-100);color:var(--brand);}
                         <input type="text" name="reason" style="min-width:320px;width:100%;" placeholder="e.g. Compensatory Off — swapped with 21-Jun Sunday duty">
                     </div>
                 </div>
+                <div class="row" style="margin-top:14px;">
+                    <div class="fgroup" style="flex:1;">
+                        <label>Absent on Work Day (User Nos) — optional</label>
+                        <input type="text" name="absent_users" style="min-width:320px;width:100%;" placeholder="e.g. 1426, 1295, 1564">
+                        <span class="hint">These employees are NOT marked present and get a 1-day unpaid leave (one-day deduction). Separate by comma or space.</span>
+                    </div>
+                </div>
                 <div style="margin-top:16px;display:flex;gap:10px;">
                     <button type="submit" class="btn btn-success">&#10003; Apply Swap</button>
                     <a href="holidays.php" class="btn btn-gray">View Holidays</a>
@@ -260,6 +301,7 @@ th{background:var(--gray-100);color:var(--brand);}
         <ul style="margin:6px 0 0;padding-left:18px;">
             <li><strong>Off day</strong> is added to Holidays &rarr; the salary engine pays it and counts <em>no absent</em> for it.</li>
             <li><strong>Work day</strong> &rarr; each active employee (not on leave) gets a present attendance row (check-in 07:00). Existing real punches are left untouched.</li>
+            <li><strong>Absent on work day</strong> &rarr; listed User Nos are skipped (not marked present) and given a 1-day unpaid leave, so they lose exactly one day's pay for missing the compensatory duty.</li>
             <li>Sundays are already paid as present, so for a Friday&harr;Sunday swap the <em>Off day</em> alone is enough; recording the Work day just keeps the attendance report accurate.</li>
             <li><strong>Important:</strong> after applying, click <em>Regenerate Salary</em> for that month so the new figures are saved.</li>
         </ul>
