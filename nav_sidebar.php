@@ -39,7 +39,7 @@ body { padding-left: 250px; }
     display: flex; align-items: center; justify-content: space-between; color: #e7ecf3; text-decoration: none;
 }
 .appnav-title:hover, .appnav-title.active { background: #e8a020; color: #1a1a1a; }
-.appnav-title .appnav-caret { font-size: 10px; transition: transform .2s; }
+.appnav-title .appnav-caret { font-size: 15px; line-height: 1; transition: transform .2s; }
 .appnav-sub { display: none; flex-direction: column; padding: 2px 0 6px 6px; }
 .appnav-sub.open { display: flex; }
 .appnav-sub a {
