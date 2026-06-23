@@ -507,15 +507,15 @@ if (has_col($employee_columns, 'employee_status')) {
     $active_condition = "(employee_status='Active' OR employee_status='' OR employee_status IS NULL)";
     $active_condition_join = "(e.employee_status='Active' OR e.employee_status='' OR e.employee_status IS NULL)";
     if (has_col($employee_columns, 'resign_date')) {
-        $active_condition = "($active_condition OR ((employee_status='Inactive' OR employee_status='Resigned') AND resign_date IS NOT NULL AND resign_date!='' AND DATE_FORMAT(resign_date, '%Y-%m') >= '$safe_status_month'))";
-        $active_condition_join = "($active_condition_join OR ((e.employee_status='Inactive' OR e.employee_status='Resigned') AND e.resign_date IS NOT NULL AND e.resign_date!='' AND DATE_FORMAT(e.resign_date, '%Y-%m') >= '$safe_status_month'))";
+        $active_condition = "($active_condition OR (employee_status IN ('Inactive','Resigned','Absconding','Terminated','End of Contract') AND resign_date IS NOT NULL AND resign_date!='' AND DATE_FORMAT(resign_date, '%Y-%m') >= '$safe_status_month'))";
+        $active_condition_join = "($active_condition_join OR (e.employee_status IN ('Inactive','Resigned','Absconding','Terminated','End of Contract') AND e.resign_date IS NOT NULL AND e.resign_date!='' AND DATE_FORMAT(e.resign_date, '%Y-%m') >= '$safe_status_month'))";
     }
 } elseif (has_col($employee_columns, 'status')) {
     $active_condition = "(status='Active' OR status='' OR status IS NULL)";
     $active_condition_join = "(e.status='Active' OR e.status='' OR e.status IS NULL)";
     if (has_col($employee_columns, 'resign_date')) {
-        $active_condition = "($active_condition OR ((status='Inactive' OR status='Resigned') AND resign_date IS NOT NULL AND resign_date!='' AND DATE_FORMAT(resign_date, '%Y-%m') >= '$safe_status_month'))";
-        $active_condition_join = "($active_condition_join OR ((e.status='Inactive' OR e.status='Resigned') AND e.resign_date IS NOT NULL AND e.resign_date!='' AND DATE_FORMAT(e.resign_date, '%Y-%m') >= '$safe_status_month'))";
+        $active_condition = "($active_condition OR (status IN ('Inactive','Resigned','Absconding','Terminated','End of Contract') AND resign_date IS NOT NULL AND resign_date!='' AND DATE_FORMAT(resign_date, '%Y-%m') >= '$safe_status_month'))";
+        $active_condition_join = "($active_condition_join OR (e.status IN ('Inactive','Resigned','Absconding','Terminated','End of Contract') AND e.resign_date IS NOT NULL AND e.resign_date!='' AND DATE_FORMAT(e.resign_date, '%Y-%m') >= '$safe_status_month'))";
     }
 }
 
