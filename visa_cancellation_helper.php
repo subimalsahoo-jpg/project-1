@@ -194,8 +194,97 @@ if (!function_exists('vc_build_where')) {
     }
 }
 
+if (!function_exists('vc_fetch_resigned_virtual')) {
+    /*
+       Surface employees who have RESIGNED (status Resign/Resigned, or a past
+       resign_date) but do NOT yet have a cancellation record, as "to-process"
+       virtual rows so HR can open and close their file from this report.
+       Resignation == Resign here. Skipped when filters target processed
+       records (a non-Pending status, a non-Resignation reason, or a cancel
+       date range — virtual rows have no cancellation date yet).
+    */
+    function vc_fetch_resigned_virtual($conn, $f) {
+        if (!empty($f['cancellation_status']) && $f['cancellation_status'] !== 'Pending') { return []; }
+        if (!empty($f['reason']) && $f['reason'] !== 'Resignation') { return []; }
+        if (!empty($f['from']) || !empty($f['to'])) { return []; }
+
+        $emp_cols = vc_table_columns($conn, 'employees');
+        $namecol = vc_employee_name_col($conn);
+        $status_col = isset($emp_cols['employee_status']) ? 'employee_status'
+                    : (isset($emp_cols['status']) ? 'status' : null);
+        $today = date('Y-m-d');
+        $esc = fn($v) => mysqli_real_escape_string($conn, trim((string)$v));
+
+        $resigned = [];
+        if ($status_col) { $resigned[] = "LOWER(e.`$status_col`) IN ('resign','resigned')"; }
+        if (isset($emp_cols['resign_date'])) {
+            $resigned[] = "(e.resign_date IS NOT NULL AND e.resign_date!='' AND e.resign_date!='0000-00-00' AND e.resign_date<='$today')";
+        }
+        if (empty($resigned)) { return []; }
+
+        $where = ['(' . implode(' OR ', $resigned) . ')'];
+        $where[] = "e.user_no NOT IN (SELECT user_no FROM visa_cancellations)";
+        if (!empty($f['department'])  && isset($emp_cols['department']))  { $where[] = "e.department='" . $esc($f['department']) . "'"; }
+        if (!empty($f['designation']) && isset($emp_cols['designation'])) { $where[] = "e.designation='" . $esc($f['designation']) . "'"; }
+        if (!empty($f['nationality']) && isset($emp_cols['nationality'])) { $where[] = "e.nationality='" . $esc($f['nationality']) . "'"; }
+        if (!empty($f['visa_status']) && isset($emp_cols['visa_expiry_date'])) {
+            if ($f['visa_status'] === 'Expired') { $where[] = "(e.visa_expiry_date IS NOT NULL AND e.visa_expiry_date < '$today')"; }
+            elseif ($f['visa_status'] === 'Valid') { $where[] = "(e.visa_expiry_date IS NULL OR e.visa_expiry_date >= '$today')"; }
+        }
+        if (!empty($f['search'])) {
+            $s = $esc($f['search']);
+            $parts = ["e.user_no LIKE '%$s%'", "e.`$namecol` LIKE '%$s%'"];
+            if (isset($emp_cols['emirates_id_number'])) { $parts[] = "e.emirates_id_number LIKE '%$s%'"; }
+            if (isset($emp_cols['visa_id_number']))     { $parts[] = "e.visa_id_number LIKE '%$s%'"; }
+            $where[] = '(' . implode(' OR ', $parts) . ')';
+        }
+
+        $where_sql = implode(' AND ', $where);
+        $order = isset($emp_cols['resign_date']) ? "e.resign_date DESC, " : "";
+        $res = mysqli_query($conn, "SELECT e.* FROM employees e WHERE $where_sql ORDER BY $order CAST(e.user_no AS UNSIGNED) ASC, e.user_no ASC");
+        $rows = [];
+        if ($res) {
+            while ($e = mysqli_fetch_assoc($res)) {
+                $rows[] = [
+                    'id' => 0, '_virtual' => true,
+                    'user_no' => $e['user_no'] ?? '',
+                    'emp_name' => vc_pick($e, [$namecol, 'full_name', 'name']),
+                    'employee_id' => vc_pick($e, ['employee_id']),
+                    'card_no' => vc_pick($e, ['card_no']),
+                    'passport' => vc_pick($e, ['passport']),
+                    'emirates_id_number' => vc_pick($e, ['emirates_id_number']),
+                    'nationality' => vc_pick($e, ['nationality']),
+                    'department' => vc_pick($e, ['department']),
+                    'designation' => vc_pick($e, ['designation']),
+                    'emirates_number' => vc_pick($e, ['emirates_id_number']),
+                    'visa_type' => '',
+                    'visa_issue_date' => vc_pick($e, ['visa_issuing_date']),
+                    'visa_expiry_date' => vc_pick($e, ['visa_expiry_date']),
+                    'visa_sponsor' => '',
+                    'labour_card_number' => vc_pick($e, ['uid_number']),
+                    'visa_cancellation_date' => null,
+                    'labour_card_cancellation_date' => null,
+                    'cancellation_application_number' => '',
+                    'cancellation_status' => 'Pending',
+                    'cancellation_reason' => 'Resignation',
+                    'last_working_date' => vc_pick($e, ['resign_date']),
+                    'notice_period_start' => null, 'notice_period_end' => null,
+                    'basic_salary' => vc_pick($e, ['basic_salary'], 0),
+                    'gratuity_amount' => 0, 'leave_encashment' => 0,
+                    'final_settlement_amount' => 0, 'settlement_status' => 'Pending',
+                    'exit_country_date' => null, 'air_ticket_provided' => 0, 're_entry_eligible' => 1,
+                    'remarks' => '',
+                    'passport_returned' => 0, 'emirates_id_returned' => 0, 'company_assets_returned' => 0,
+                    'clearance_status' => 'Pending',
+                ];
+            }
+        }
+        return $rows;
+    }
+}
+
 if (!function_exists('vc_fetch_records')) {
-    /* Joined cancellation records (newest cancellation first). */
+    /* Joined cancellation records (newest first) + resigned to-process rows. */
     function vc_fetch_records($conn, $f) {
         $namecol = vc_employee_name_col($conn);
         $emp_cols = vc_table_columns($conn, 'employees');
@@ -220,8 +309,9 @@ if (!function_exists('vc_fetch_records')) {
         ";
         $rows = [];
         $res = mysqli_query($conn, $sql);
-        if ($res) { while ($r = mysqli_fetch_assoc($res)) { $rows[] = $r; } }
-        return $rows;
+        if ($res) { while ($r = mysqli_fetch_assoc($res)) { $r['_virtual'] = false; $rows[] = $r; } }
+        // Surface resigned employees not yet processed, so their file can be closed here.
+        return array_merge($rows, vc_fetch_resigned_virtual($conn, $f));
     }
 }
 
