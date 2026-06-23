@@ -141,6 +141,7 @@ body { padding-left: 250px; }
         <a href="dashboard.php#attendance_upload">&#128337; Upload Attendance</a>
         <a href="auto_import_crosschex.php" class="<?php echo appnav_active('auto_import_crosschex.php'); ?>">&#128260; Sync CrossChex</a>
         <a href="ot_upload.php" class="<?php echo appnav_active('ot_upload.php'); ?>">&#9203; OT Upload</a>
+        <a href="swap_day.php" class="<?php echo appnav_active('swap_day.php'); ?>">&#128260; Swap Day / Comp-Off</a>
         <?php endif; ?>
     </div>
     <?php endif; ?>
