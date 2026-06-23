@@ -426,8 +426,8 @@ body {
 }
 .submenu a:hover { background: #2d3748; color: #fff; }
 
-/* ── Main ── */
-.main { margin-left: 255px; padding: 22px; }
+/* ── Main ── (offset handled by shared nav_sidebar's body padding) */
+.main { margin-left: 0; padding: 22px; }
 
 /* ── Topbar ── */
 .topbar {
@@ -888,7 +888,7 @@ body {
 @media (max-width: 700px)  {
     .cards { grid-template-columns: 1fr; }
     .sidebar { width: 200px; }
-    .main { margin-left: 200px; }
+    .main { margin-left: 0; }
     .charts-row { flex-direction: column; }
     .today-box { width: 100%; }
 }
@@ -899,81 +899,7 @@ body {
 <!-- ══════════════════════════════
      Sidebar
 ══════════════════════════════ -->
-<div class="sidebar">
-    <div class="logo"><?php echo company_logo_img(26, 'background:#fff;border-radius:5px;padding:2px;margin-right:6px;'); ?> Payroll Management System</div>
-
-    <div class="menu-title active">&#127968; Dashboard</div>
-
-    <?php if(hasPermission('employee_view') || hasPermission('employee_add')): ?>
-    <div class="menu-title" onclick="toggleMenu('emp')">&#128100; Employees &#9662;</div>
-    <div class="submenu" id="emp">
-        <?php if(hasPermission('employee_view')): ?>
-        <a href="employee_overview.php">&#128203; Employee Overview</a>
-        <a href="employee_list.php">&#128221; Employee Details</a>
-        <?php endif; ?>
-        <?php if(hasPermission('employee_add')): ?>
-        <a href="add_employee.php">&#43; Add Employee</a>
-        <a href="employee_salary.php">&#128176; Salary Details</a>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if(hasPermission('salary_view') || hasPermission('salary_slip_print') || hasPermission('attendance_report') || hasPermission('reports_view')): ?>
-    <div class="menu-title" onclick="toggleMenu('report')">&#128202; Reports &#9662;</div>
-    <div class="submenu" id="report">
-        <?php if(hasPermission('salary_view')): ?>
-        <a href="generate_salary.php">&#128181; Salary Sheet</a>
-        <?php endif; ?>
-        <?php if(hasPermission('salary_generate')): ?>
-        <a href="advance_manage.php">&#128184; Advance Salary</a>
-        <?php endif; ?>
-        <?php if(hasPermission('salary_slip_print')): ?>
-        <a href="salary_slip.php">&#129534; Salary Slip</a>
-        <?php endif; ?>
-        <?php if(hasPermission('attendance_report')): ?>
-        <a href="attendance_report.php">&#128337; Attendance Report</a>
-        <?php endif; ?>
-        <?php if(hasPermission('reports_view')): ?>
-        <a href="overtime_report.php">&#9203; Overtime Report</a>
-        <a href="visa_expiring.php">&#9888; Visa Expire</a>
-        <a href="insurance_expiring.php">&#128737; Insurance Expire</a>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if(hasPermission('vacation_manage')): ?>
-    <div class="menu-title" onclick="toggleMenu('vacation')">&#127965; Vacation / Absent &#9662;</div>
-    <div class="submenu" id="vacation">
-        <a href="add_vacation.php">&#43; Add Vacation</a>
-        <a href="vacation_details.php">&#128197; Vacation Details</a>
-        <a href="absent_details.php">&#128197; Absent Details</a>
-        <a href="holidays.php">&#127881; Holidays</a>
-    </div>
-    <?php endif; ?>
-
-    <?php if(hasPermission('uploads_manage') || hasPermission('attendance_upload')): ?>
-    <div class="menu-title" onclick="toggleMenu('upload')">&#128228; Uploads &#9662;</div>
-    <div class="submenu" id="upload">
-        <?php if(hasPermission('uploads_manage')): ?>
-        <a href="#employee_upload">&#128100; Upload Employee Excel</a>
-        <?php endif; ?>
-        <?php if(hasPermission('attendance_upload')): ?>
-        <a href="#attendance_upload">&#128337; Upload Attendance</a>
-        <a href="auto_import_crosschex.php">&#128260; Sync CrossChex</a>
-        <a href="ot_upload.php">&#9203; OT Upload</a>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if(hasPermission('user_manage')): ?>
-    <div class="menu-title" onclick="location.href='manage_users.php'">&#9881; User Management</div>
-    <?php endif; ?>
-
-    <div class="sidebar-credit">
-        <?php echo company_logo_img(20, 'background:#fff;border-radius:4px;padding:2px;margin-right:5px;'); ?>
-        <span><?php echo htmlspecialchars(APP_CREDIT); ?></span>
-    </div>
-</div>
+<?php include 'nav_sidebar.php'; ?>
 
 <!-- ══════════════════════════════
      Main Content
