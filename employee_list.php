@@ -242,6 +242,34 @@ if ($is_excel) {
     header("Content-Disposition: attachment; filename=employee_list_" . date('Y_m_d') . ".xls");
     header("Pragma: no-cache");
     header("Expires: 0");
+
+    // Export ONLY the employee data table — no side panel, top bar, filters,
+    // counts or the visa-expiry popup (Excel ignores CSS display:none, so we
+    // must not emit that markup at all).
+    echo "\xEF\xBB\xBF";
+    echo "<html><head><meta charset=\"utf-8\"></head><body>";
+    echo "<table border=\"1\">";
+    echo "<tr>";
+    foreach ($fields as $field) {
+        echo "<th>" . h($field[0]) . "</th>";
+    }
+    echo "</tr>";
+    if ($result && mysqli_num_rows($result) > 0) {
+        while ($row = mysqli_fetch_assoc($result)) {
+            echo "<tr>";
+            foreach ($fields as $field) {
+                $value = value_from($row, $field[1]);
+                if (is_date_field_label($field[0])) {
+                    $value = display_date_dmy($value);
+                }
+                // Force text so long numbers (phone / visa ID) don't become 9.7E+11.
+                echo "<td style=\"mso-number-format:'\\@';\">" . h($value) . "</td>";
+            }
+            echo "</tr>";
+        }
+    }
+    echo "</table></body></html>";
+    exit;
 }
 ?>
 <!DOCTYPE html>
