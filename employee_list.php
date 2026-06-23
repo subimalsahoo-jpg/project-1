@@ -81,10 +81,10 @@ if ($status_filter !== '') {
     if ($status_filter === 'Resigned') {
         $status_parts = [];
         if (isset($employee_columns['employee_status'])) {
-            $status_parts[] = "employee_status IN ('Resigned','Resign')";
+            $status_parts[] = "employee_status IN ('Resigned','Resign','Absconding','Terminated','End of Contract')";
         }
         if (isset($employee_columns['status'])) {
-            $status_parts[] = "status IN ('Resigned','Resign')";
+            $status_parts[] = "status IN ('Resigned','Resign','Absconding','Terminated','End of Contract')";
         }
         if (isset($employee_columns['resign_date'])) {
             $status_parts[] = "(resign_date IS NOT NULL AND resign_date!='' AND resign_date!='0000-00-00' AND resign_date<=CURDATE())";
@@ -148,7 +148,7 @@ if ($fcount_res) {
         $cs = $cs !== '' ? $cs : 'Active';
         $rd_val = $cr['resign_date'] ?? '';
         $has_past_resign = $rd_val !== '' && $rd_val !== '0000-00-00' && strtotime($rd_val) !== false && strtotime($rd_val) <= strtotime(date('Y-m-d'));
-        if (in_array(strtolower($cs), ['resign','resigned']) || $has_past_resign) { $fcount_resigned++; }
+        if (in_array(strtolower($cs), ['resign','resigned','absconding','terminated','end of contract']) || $has_past_resign) { $fcount_resigned++; }
         elseif (strtolower($cs) === 'inactive') { $fcount_inactive++; }
         else { $fcount_active++; }
     }
@@ -157,9 +157,9 @@ if ($fcount_res) {
 // --- Status counts (total, no extra filters) ---
 $resigned_condition = "";
 if (isset($employee_columns['employee_status'])) {
-    $resigned_condition = "employee_status IN ('Resigned','Resign')";
+    $resigned_condition = "employee_status IN ('Resigned','Resign','Absconding','Terminated','End of Contract')";
 } elseif (isset($employee_columns['status'])) {
-    $resigned_condition = "status IN ('Resigned','Resign')";
+    $resigned_condition = "status IN ('Resigned','Resign','Absconding','Terminated','End of Contract')";
 }
 if (isset($employee_columns['resign_date'])) {
     $rd = "(resign_date IS NOT NULL AND resign_date!='' AND resign_date!='0000-00-00' AND resign_date<=CURDATE())";
@@ -174,7 +174,7 @@ if ($count_res) {
         $cs = $cs !== '' ? $cs : 'Active';
         $rd_val = $cr['resign_date'] ?? '';
         $has_past_resign = $rd_val !== '' && $rd_val !== '0000-00-00' && strtotime($rd_val) !== false && strtotime($rd_val) <= strtotime(date('Y-m-d'));
-        if (in_array(strtolower($cs), ['resign','resigned']) || $has_past_resign) {
+        if (in_array(strtolower($cs), ['resign','resigned','absconding','terminated','end of contract']) || $has_past_resign) {
             $count_resigned++;
         } elseif (strtolower($cs) === 'inactive') {
             $count_inactive++;
@@ -646,6 +646,9 @@ table{width:100%;}
             <option value="Active" <?php echo $status_filter === 'Active' ? 'selected' : ''; ?>>Active</option>
             <option value="Inactive" <?php echo $status_filter === 'Inactive' ? 'selected' : ''; ?>>Inactive</option>
             <option value="Resigned" <?php echo $status_filter === 'Resigned' ? 'selected' : ''; ?>>Resigned</option>
+            <option value="Absconding" <?php echo $status_filter === 'Absconding' ? 'selected' : ''; ?>>Absconding</option>
+            <option value="Terminated" <?php echo $status_filter === 'Terminated' ? 'selected' : ''; ?>>Terminated</option>
+            <option value="End of Contract" <?php echo $status_filter === 'End of Contract' ? 'selected' : ''; ?>>End of Contract</option>
         </select>
         <?php if (!empty($departments)): ?>
         <label>Dept:</label>

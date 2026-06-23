@@ -906,6 +906,9 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
                 <option value="Active"   <?php echo selected($search_employee, 'employee_status', 'Active'); ?>>Active</option>
                 <option value="Inactive" <?php echo selected($search_employee, 'employee_status', 'Inactive'); ?>>Inactive</option>
                 <option value="Resigned" <?php echo selected($search_employee, 'employee_status', 'Resigned'); ?>>Resigned</option>
+                <option value="Absconding" <?php echo selected($search_employee, 'employee_status', 'Absconding'); ?>>Absconding</option>
+                <option value="Terminated" <?php echo selected($search_employee, 'employee_status', 'Terminated'); ?>>Terminated</option>
+                <option value="End of Contract" <?php echo selected($search_employee, 'employee_status', 'End of Contract'); ?>>End of Contract</option>
             </select>
         </div>
 

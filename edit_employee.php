@@ -109,13 +109,13 @@ button{
 
 <label>Employee Status</label>
 <select name="employee_status">
-    <option value="Active" <?php if(($row['employee_status'] ?? 'Active')=='Active') echo 'selected'; ?>>
-        Active
-    </option>
-
-    <option value="Inactive" <?php if(($row['employee_status'] ?? '')=='Inactive') echo 'selected'; ?>>
-        Inactive
-    </option>
+    <?php $__es = $row['employee_status'] ?? 'Active'; ?>
+    <option value="Active"          <?php if($__es=='Active')          echo 'selected'; ?>>Active</option>
+    <option value="Inactive"        <?php if($__es=='Inactive')        echo 'selected'; ?>>Inactive</option>
+    <option value="Resigned"        <?php if($__es=='Resigned')        echo 'selected'; ?>>Resigned</option>
+    <option value="Absconding"      <?php if($__es=='Absconding')      echo 'selected'; ?>>Absconding</option>
+    <option value="Terminated"      <?php if($__es=='Terminated')      echo 'selected'; ?>>Terminated</option>
+    <option value="End of Contract" <?php if($__es=='End of Contract') echo 'selected'; ?>>End of Contract</option>
 </select>
 
 <button type="submit" name="update">

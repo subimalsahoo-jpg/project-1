@@ -8,13 +8,15 @@ if(isset($_GET['id']) && isset($_GET['status'])){
 
     $status = $_GET['status'];
 
-    if($status != 'Active' && $status != 'Inactive'){
+    $allowed_statuses = ['Active', 'Inactive', 'Resigned', 'Absconding', 'Terminated', 'End of Contract'];
+    if(!in_array($status, $allowed_statuses, true)){
         die("Invalid Status");
     }
 
+    $safe_status = mysqli_real_escape_string($conn, $status);
     mysqli_query($conn, "
         UPDATE employees
-        SET status='$status'
+        SET status='$safe_status'
         WHERE id='$id'
     ");
 
