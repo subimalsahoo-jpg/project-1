@@ -106,7 +106,7 @@ $is_print = isset($_GET['print']) && $_GET['print'] === '1';
 /* ── CSV / Excel export ──────────────────────────────────────────── */
 if (($_GET['export'] ?? '') === 'csv') {
     $headers = ['User No','Emp ID','Name','Passport No','Emirates ID','Nationality','Department','Designation','Company',
-        'Visa No','Visa Type','Visa Issue','Visa Expiry','Sponsor','Labour Card No',
+        'Emirates No','Visa Type','Visa Issue','Visa Expiry','Sponsor','Labour Card No',
         'Visa Cancel Date','Labour Card Cancel Date','Cancellation App No','Cancellation Status','Reason',
         'Last Working Day','Notice Start','Notice End','Basic Salary','Gratuity','Leave Encashment','Final Settlement','Settlement Status',
         'Exit Country Date','Air Ticket','Re-entry Eligible','Passport Returned','Emirates ID Returned','Assets Returned','Clearance','Remarks'];
@@ -116,13 +116,22 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename=visa_cancellation_report_' . date('Y_m_d') . '.csv');
     header('Pragma: no-cache'); header('Expires: 0');
     echo "\xEF\xBB\xBF";
+    // Summary block (respects the active filters)
+    echo implode(',', array_map($cell, ['Visa Cancellation Report', $company])) . "\r\n";
+    echo implode(',', array_map($cell, ['Generated', date('d-m-Y H:i')])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Cancellations', $summary['total']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Pending / Submitted', $summary['pending']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Completed', $summary['completed']])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Gratuity Payable (AED)', money($summary['total_gratuity'])])) . "\r\n";
+    echo implode(',', array_map($cell, ['Total Final Settlement (AED)', money($summary['total_settlement'])])) . "\r\n";
+    echo "\r\n";
     echo implode(',', array_map($cell, $headers)) . "\r\n";
     foreach ($rows as $r) {
         $line = [
             vc_pick($r, ['user_no']), vc_pick($r, ['employee_id','card_no']), vc_pick($r, ['emp_name']),
             vc_pick($r, ['passport']), vc_pick($r, ['emirates_id_number']), vc_pick($r, ['nationality']),
             vc_pick($r, ['department']), vc_pick($r, ['designation']), $company,
-            vc_pick($r, ['visa_number']), vc_pick($r, ['visa_type']), vc_date_dmy(vc_pick($r, ['visa_issue_date'])),
+            vc_pick($r, ['emirates_number']), vc_pick($r, ['visa_type']), vc_date_dmy(vc_pick($r, ['visa_issue_date'])),
             vc_date_dmy(vc_pick($r, ['visa_expiry_date'])), vc_pick($r, ['visa_sponsor']), vc_pick($r, ['labour_card_number']),
             vc_date_dmy(vc_pick($r, ['visa_cancellation_date'])), vc_date_dmy(vc_pick($r, ['labour_card_cancellation_date'])),
             vc_pick($r, ['cancellation_application_number']), vc_pick($r, ['cancellation_status']), vc_pick($r, ['cancellation_reason']),
@@ -156,10 +165,22 @@ if ($can_edit && isset($_GET['edit'])) {
     if ($new_user !== '') {
         $form_employee = vc_get_employee($conn, $new_user);
         if ($form_employee) {
+            // Map the employee's status to a default cancellation reason.
+            $emp_status = strtolower(trim((string)vc_pick($form_employee, ['employee_status', 'status'])));
+            $reason_map = [
+                'resign' => 'Resignation', 'resigned' => 'Resignation',
+                'terminated' => 'Termination', 'absconding' => 'Absconding',
+                'end of contract' => 'End of Contract',
+            ];
+            $default_reason = $reason_map[$emp_status] ?? '';
+            // A past resign_date with no specific exit status still implies resignation.
+            if ($default_reason === '' && trim((string)vc_pick($form_employee, ['resign_date'])) !== '') {
+                $default_reason = 'Resignation';
+            }
             // Pre-fill visa + settlement fields from the employee record.
             $rec = [
                 'user_no'          => $new_user,
-                'visa_number'      => vc_pick($form_employee, ['visa_id_number']),
+                'emirates_number'  => vc_pick($form_employee, ['emirates_id_number']),
                 'visa_issue_date'  => vc_pick($form_employee, ['visa_issuing_date']),
                 'visa_expiry_date' => vc_pick($form_employee, ['visa_expiry_date']),
                 'labour_card_number' => vc_pick($form_employee, ['uid_number']),
@@ -167,6 +188,7 @@ if ($can_edit && isset($_GET['edit'])) {
                 'last_working_date'=> vc_pick($form_employee, ['resign_date']),
                 'visa_type'        => 'Employment',
                 'cancellation_status' => 'Pending',
+                'cancellation_reason' => $default_reason,
                 'settlement_status'   => 'Pending',
                 'clearance_status'    => 'Pending',
                 're_entry_eligible'   => 1,
@@ -288,6 +310,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
         <div class="stat amber"><div class="label">Pending / Submitted</div><div class="value"><?php echo (int)$summary['pending']; ?></div></div>
         <div class="stat green"><div class="label">Completed</div><div class="value"><?php echo (int)$summary['completed']; ?></div></div>
         <div class="stat gray"><div class="label">Total Gratuity Payable</div><div class="value" style="font-size:17px;">AED <?php echo money($summary['total_gratuity']); ?></div></div>
+        <div class="stat green"><div class="label">Total Final Settlement</div><div class="value" style="font-size:17px;">AED <?php echo money($summary['total_settlement']); ?></div></div>
     </div>
 
     <?php if (!$is_print): ?>
@@ -353,7 +376,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
 
                 <fieldset><legend>Visa Details</legend>
                     <div class="grid">
-                        <div class="fgroup"><label>Visa Number</label><input type="text" name="visa_number" value="<?php echo vh(rv($rec,'visa_number')); ?>"></div>
+                        <div class="fgroup"><label>Emirates Number</label><input type="text" name="emirates_number" value="<?php echo vh(rv($rec,'emirates_number')); ?>"></div>
                         <div class="fgroup"><label>Visa Type</label><select name="visa_type"><option value="">—</option><?php foreach (vc_visa_types() as $t): ?><option value="<?php echo $t; ?>" <?php echo rv($rec,'visa_type')===$t?'selected':''; ?>><?php echo $t; ?></option><?php endforeach; ?></select></div>
                         <div class="fgroup"><label>Visa Issue Date</label><input type="date" name="visa_issue_date" value="<?php echo vh(rv($rec,'visa_issue_date')); ?>"></div>
                         <div class="fgroup"><label>Visa Expiry Date</label><input type="date" name="visa_expiry_date" value="<?php echo vh(rv($rec,'visa_expiry_date')); ?>"></div>
@@ -419,7 +442,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
         <table>
             <thead>
                 <tr>
-                    <th>SL</th><th>User No</th><th>Name</th><th>Passport No</th><th>Visa No</th>
+                    <th>SL</th><th>User No</th><th>Name</th><th>Passport No</th><th>Emirates No</th>
                     <th>Visa Expiry</th><th>Cancel Date</th><th>Last Working Day</th><th>Reason</th>
                     <th>Status</th><th class="num">Gratuity</th><th class="num">Final Settlement</th>
                     <?php if (!$is_print): ?><th class="actions-col">Actions</th><?php endif; ?>
@@ -436,24 +459,28 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
                     <td><strong><?php echo vh(vc_pick($r,['user_no'])); ?></strong></td>
                     <td><?php echo vh(vc_pick($r,['emp_name'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vh(vc_pick($r,['passport'])) ?: '<span class="muted">—</span>'; ?></td>
-                    <td><?php echo vh(vc_pick($r,['visa_number'])) ?: '<span class="muted">—</span>'; ?></td>
+                    <td><?php echo vh(vc_pick($r,['emirates_number'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['visa_expiry_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['visa_cancellation_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vc_date_dmy(vc_pick($r,['last_working_date'])) ?: '<span class="muted">—</span>'; ?></td>
                     <td><?php echo vh(vc_pick($r,['cancellation_reason'])) ?: '<span class="muted">—</span>'; ?></td>
-                    <td><span class="pill" style="background:<?php echo $bg; ?>;color:<?php echo $fg; ?>;"><?php echo vh(vc_pick($r,['cancellation_status'])); ?></span></td>
+                    <td><span class="pill" style="background:<?php echo $bg; ?>;color:<?php echo $fg; ?>;"><?php echo vh(vc_pick($r,['cancellation_status'])); ?></span><?php if (!empty($r['_virtual'])): ?> <span class="pill" style="background:#fde68a;color:#92400e;" title="Resigned employee — file not opened yet">Resigned · to process</span><?php endif; ?></td>
                     <td class="num"><?php echo money(vc_pick($r,['gratuity_amount'],0)); ?></td>
                     <td class="num"><?php echo money(vc_pick($r,['final_settlement_amount'],0)); ?></td>
                     <?php if (!$is_print): ?>
                     <td class="actions-col">
                         <div style="display:flex;gap:5px;">
-                            <a class="btn btn-gray btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>edit=<?php echo (int)$r['id']; ?>"><?php echo $can_edit ? 'Edit' : 'View'; ?></a>
-                            <?php if ($can_edit): ?>
-                            <form method="POST" onsubmit="return confirm('Delete this cancellation record?');" style="display:inline;">
-                                <input type="hidden" name="action" value="delete">
-                                <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
-                                <button type="submit" class="btn btn-danger btn-sm">Del</button>
-                            </form>
+                            <?php if (!empty($r['_virtual'])): ?>
+                                <a class="btn btn-success btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>new=1&user_no=<?php echo urlencode((string)vc_pick($r,['user_no'])); ?>"><?php echo $can_edit ? 'Process &amp; Close' : 'View'; ?></a>
+                            <?php else: ?>
+                                <a class="btn btn-gray btn-sm" href="visa_cancellation.php?<?php echo $qs ? $qs.'&' : ''; ?>edit=<?php echo (int)$r['id']; ?>"><?php echo $can_edit ? 'Edit' : 'View'; ?></a>
+                                <?php if ($can_edit): ?>
+                                <form method="POST" onsubmit="return confirm('Delete this cancellation record?');" style="display:inline;">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
+                                    <button type="submit" class="btn btn-danger btn-sm">Del</button>
+                                </form>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </td>
