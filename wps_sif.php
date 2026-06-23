@@ -15,7 +15,7 @@
 ───────────────────────────────────────────── */
 include 'auth.php';
 include_once 'wps_helper.php';
-requirePermission('salary_generate');
+requireAnyPermission(['salary_generate','wps_manage']);
 
 wps_ensure_schema($conn);
 

@@ -95,14 +95,16 @@ body { padding-left: 250px; }
     </div>
     <?php endif; ?>
 
-    <?php if (hasPermission('salary_view') || hasPermission('salary_slip_print') || hasPermission('attendance_report') || hasPermission('reports_view')): ?>
+    <?php if (hasPermission('salary_view') || hasPermission('salary_slip_print') || hasPermission('attendance_report') || hasPermission('reports_view') || hasPermission('salary_generate') || hasPermission('advance_manage') || hasPermission('wps_manage') || hasPermission('overtime_view') || hasPermission('gratuity_view') || hasPermission('visa_cancellation_manage') || hasPermission('visa_insurance_view') || hasPermission('employee_view')): ?>
     <div class="appnav-title" onclick="appnavToggle('report')">&#128202; Reports <span class="appnav-caret">&#9662;</span></div>
     <div class="appnav-sub" id="appnav-report">
         <?php if (hasPermission('salary_view')): ?>
         <a href="generate_salary.php" class="<?php echo appnav_active('generate_salary.php'); ?>">&#128181; Salary Sheet</a>
         <?php endif; ?>
-        <?php if (hasPermission('salary_generate')): ?>
+        <?php if (hasPermission('salary_generate') || hasPermission('advance_manage')): ?>
         <a href="advance_manage.php" class="<?php echo appnav_active('advance_manage.php'); ?>">&#128184; Advance Salary</a>
+        <?php endif; ?>
+        <?php if (hasPermission('salary_generate') || hasPermission('wps_manage')): ?>
         <a href="wps_sif.php" class="<?php echo appnav_active('wps_sif.php'); ?>">&#127974; WPS / SIF File</a>
         <?php endif; ?>
         <?php if (hasPermission('salary_slip_print')): ?>
@@ -111,11 +113,19 @@ body { padding-left: 250px; }
         <?php if (hasPermission('attendance_report')): ?>
         <a href="attendance_report.php" class="<?php echo appnav_active('attendance_report.php'); ?>">&#128337; Attendance Report</a>
         <?php endif; ?>
-        <?php if (hasPermission('reports_view')): ?>
+        <?php if (hasPermission('reports_view') || hasPermission('overtime_view')): ?>
         <a href="overtime_report.php" class="<?php echo appnav_active('overtime_report.php'); ?>">&#9203; Overtime Report</a>
+        <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('gratuity_view')): ?>
         <a href="gratuity_report.php" class="<?php echo appnav_active('gratuity_report.php'); ?>">&#128176; Gratuity Report</a>
+        <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('employee_view') || hasPermission('visa_insurance_view')): ?>
         <a href="visa_expiring.php" class="<?php echo appnav_active('visa_expiring.php'); ?>">&#9888; Visa Expire</a>
+        <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('visa_cancellation_manage')): ?>
         <a href="visa_cancellation.php" class="<?php echo appnav_active('visa_cancellation.php'); ?>">&#128203; Visa Cancellation</a>
+        <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('employee_view') || hasPermission('visa_insurance_view')): ?>
         <a href="insurance_expiring.php" class="<?php echo appnav_active('insurance_expiring.php'); ?>">&#128737; Insurance Expire</a>
         <?php endif; ?>
     </div>

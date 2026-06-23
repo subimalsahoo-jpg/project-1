@@ -1,7 +1,7 @@
 <?php
 include 'auth.php';
 include_once 'advance_helper.php';
-requirePermission('salary_generate');
+requireAnyPermission(['salary_generate','advance_manage']);
 payroll_ensure_advance_schema($conn);
 
 function h($value) {

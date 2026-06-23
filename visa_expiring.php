@@ -1,6 +1,6 @@
 <?php
 include 'auth.php';
-requirePermission('employee_view');
+requireAnyPermission(['employee_view','visa_insurance_view']);
 include_once 'visa_helper.php';
 
 function h($value) {

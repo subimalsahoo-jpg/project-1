@@ -13,10 +13,10 @@
 ───────────────────────────────────────────── */
 include 'auth.php';
 include_once 'visa_cancellation_helper.php';
-requirePermission('reports_view');
+requireAnyPermission(['reports_view','visa_cancellation_manage']);
 vc_ensure_schema($conn);
 
-$can_edit = function_exists('hasPermission') ? (hasPermission('employee_add') || is_admin_user()) : true;
+$can_edit = function_exists('hasPermission') ? (hasPermission('employee_add') || hasPermission('visa_cancellation_manage') || is_admin_user()) : true;
 
 function vh($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 if (!function_exists('money')) { function money($a) { return number_format((float)$a, 2); } }

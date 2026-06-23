@@ -1,6 +1,6 @@
 <?php
 include 'auth.php';
-requirePermission('reports_view');
+requireAnyPermission(['reports_view','overtime_view']);
 
 $month = normalize_input_month($_GET['month'] ?? date('Y-m'), date('Y-m'));
 // ── AJAX employee lookup endpoint ──

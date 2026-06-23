@@ -11,7 +11,7 @@
    Reads from overtime_records + attendance + employees + holidays.
 ───────────────────────────────────────────── */
 include 'auth.php';
-requirePermission('reports_view');
+requireAnyPermission(['reports_view','overtime_view']);
 
 $COMPANY_NAME = COMPANY_NAME;
 
