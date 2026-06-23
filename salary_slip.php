@@ -738,12 +738,12 @@ input{
         <button type="submit" name="show_list">Select Employees</button>
     </form>
 
-    <button onclick="window.print()">Print</button>
+    <button type="button" onclick="printSlips()">Print</button>
 </div>
 
 <?php if($show_list){ ?>
 <div class="select-box">
-    <form method="GET">
+    <form method="GET" id="selectSlipForm">
         <input type="hidden" name="month" value="<?php echo htmlspecialchars($month); ?>">
         <input type="hidden" name="selected_mode" value="1">
         <label>
@@ -804,6 +804,31 @@ function toggleSlipSelection(source) {
     for (var i = 0; i < checks.length; i++) {
         checks[i].checked = source.checked;
     }
+}
+
+function printSlips() {
+    // If payslips are already rendered on the page, just print them.
+    if (document.querySelector('.print-wrapper')) {
+        window.print();
+        return;
+    }
+
+    // On the "Select Employees" list: if some are checked, run the
+    // proper "Print Selected" flow so it never prints a blank page.
+    var selectForm = document.getElementById('selectSlipForm');
+    var checked = document.querySelectorAll('.slip-check:checked');
+
+    if (selectForm && checked.length > 0) {
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'print_slips';
+        hidden.value = '1';
+        selectForm.appendChild(hidden);
+        selectForm.submit();
+        return;
+    }
+
+    alert('Print korar age: Search kore ekjon employee ber korun, athaba "Select Employees" theke checkbox select kore "Print Selected" button-e click korun.');
 }
 
 <?php if(isset($_GET['print_slips']) && !empty($employees)){ ?>
