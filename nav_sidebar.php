@@ -48,8 +48,14 @@ body { padding-left: 250px; }
 }
 .appnav-sub a:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .appnav-sub a.active { background: #2563a8; color: #fff; font-weight: 600; }
+.appnav-logout {
+    margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: #c0392b; color: #fff; text-decoration: none;
+    padding: 11px 12px; border-radius: 7px; font-weight: 700; font-size: 14px;
+}
+.appnav-logout:hover { background: #a93226; }
 .appnav-credit {
-    margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.12);
+    margin-top: 12px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.12);
     font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.55);
     display: flex; align-items: center; flex-wrap: wrap; gap: 3px;
 }
@@ -158,6 +164,8 @@ body { padding-left: 250px; }
     <?php if (hasPermission('user_manage')): ?>
     <a href="manage_users.php" class="appnav-title <?php echo appnav_active('manage_users.php'); ?>">&#9881; User Management</a>
     <?php endif; ?>
+
+    <a href="logout.php" class="appnav-logout">&#128682; Logout</a>
 
     <div class="appnav-credit">
         <?php echo function_exists('company_logo_img') ? company_logo_img(18, 'background:#fff;border-radius:4px;padding:2px;margin-right:5px;') : ''; ?>
