@@ -25,6 +25,16 @@ include_once 'vacation_helper.php';
 function sd_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 function sd_esc($conn, $v) { return mysqli_real_escape_string($conn, (string)$v); }
 
+/* Normalise a time input (HH:MM or HH:MM:SS) to HH:MM:SS; fall back to default. */
+function sd_time($t, $default) {
+    $t = trim((string)$t);
+    if ($t === '') { return $default; }
+    if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $t, $m)) {
+        return str_pad($m[1], 2, '0', STR_PAD_LEFT) . ':' . $m[2] . ':' . (isset($m[3]) ? $m[3] : '00');
+    }
+    return $default;
+}
+
 /* Make sure the manual-reason column exists (same as edit_attendance.php). */
 $mr_check = mysqli_query($conn, "SHOW COLUMNS FROM attendance LIKE 'manual_entry_reason'");
 if ($mr_check && mysqli_num_rows($mr_check) === 0) {
@@ -74,6 +84,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     $absent_list = array_values(array_filter(array_map('trim', preg_split('/[\s,;]+/', $absent_raw))));
     $absent_set  = array_flip($absent_list);
 
+    // Work-day duty times (default 8 hours: 07:00 -> 15:50).
+    $ci_time   = sd_time($_POST['work_checkin']  ?? '', '07:00:00');
+    $co_time   = sd_time($_POST['work_checkout'] ?? '', '15:50:00');
+    $ci_time_e = sd_esc($conn, $ci_time);
+    $co_time_e = sd_esc($conn, $co_time);
+    // Correct duty times on entries already created by a previous swap.
+    $overwrite_times = isset($_POST['overwrite_times']);
+
     if ($off_date === '' && $work_date === '') {
         $flash = 'Please provide at least an Off day or a Work day.';
         $flash_type = 'err';
@@ -109,7 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
                 )
                 ORDER BY CAST(user_no AS UNSIGNED) ASC
             ");
-            $marked = 0; $already = 0;
+            $marked = 0; $already = 0; $updated = 0;
+            $has_mr = isset($att_cols['manual_entry_reason']);
             $note = sd_esc($conn, $reason !== '' ? $reason : 'Worked day swap (no punch) — marked present');
             if ($emp_q) {
                 while ($e = mysqli_fetch_assoc($emp_q)) {
@@ -117,25 +136,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
                     if (isset($absent_set[(string)$e['user_no']])) { continue; }
                     $uno = sd_esc($conn, $e['user_no']);
                     $ename = sd_esc($conn, $e['emp_name']);
-                    $row = mysqli_query($conn, "SELECT id, check_in FROM attendance WHERE user_no='$uno' AND attendance_date='$wd' LIMIT 1");
+                    $row = mysqli_query($conn, "SELECT id, check_in" . ($has_mr ? ", manual_entry_reason" : "") . " FROM attendance WHERE user_no='$uno' AND attendance_date='$wd' LIMIT 1");
                     if ($row && mysqli_num_rows($row) > 0) {
                         $r = mysqli_fetch_assoc($row);
                         $ci = trim((string)($r['check_in'] ?? ''));
+                        $existing_reason = $has_mr ? trim((string)($r['manual_entry_reason'] ?? '')) : '';
                         if ($ci === '') {
-                            $sets = ["check_in='07:00:00'"];
-                            if (isset($att_cols['check_out']))           { $sets[] = "check_out='17:00:00'"; }
+                            // No punch yet -> mark present for the worked day.
+                            $sets = ["check_in='$ci_time_e'"];
+                            if (isset($att_cols['check_out']))           { $sets[] = "check_out='$co_time_e'"; }
                             if (isset($att_cols['late_time']))           { $sets[] = "late_time='00:00:00'"; }
                             if (isset($att_cols['manual_entry_reason'])) { $sets[] = "manual_entry_reason='$note'"; }
                             mysqli_query($conn, "UPDATE attendance SET " . implode(', ', $sets) . " WHERE id=" . (int)$r['id']);
                             $marked++;
+                        } elseif ($overwrite_times && $existing_reason !== '') {
+                            // Correct the duty hours on a previously created swap/manual entry.
+                            // A non-empty manual_entry_reason means it was NOT a real machine punch.
+                            $sets = ["check_in='$ci_time_e'"];
+                            if (isset($att_cols['check_out']))           { $sets[] = "check_out='$co_time_e'"; }
+                            if (isset($att_cols['late_time']))           { $sets[] = "late_time='00:00:00'"; }
+                            // Keep the existing label unless the user typed a new reason.
+                            if (isset($att_cols['manual_entry_reason']) && $reason !== '') { $sets[] = "manual_entry_reason='$note'"; }
+                            mysqli_query($conn, "UPDATE attendance SET " . implode(', ', $sets) . " WHERE id=" . (int)$r['id']);
+                            $updated++;
                         } else {
                             $already++;
                         }
                     } else {
                         $cols = ['user_no', 'attendance_date', 'check_in'];
-                        $vals = ["'$uno'", "'$wd'", "'07:00:00'"];
+                        $vals = ["'$uno'", "'$wd'", "'$ci_time_e'"];
                         if (isset($att_cols['employee_name']))       { $cols[] = 'employee_name';       $vals[] = "'$ename'"; }
-                        if (isset($att_cols['check_out']))           { $cols[] = 'check_out';           $vals[] = "'17:00:00'"; }
+                        if (isset($att_cols['check_out']))           { $cols[] = 'check_out';           $vals[] = "'$co_time_e'"; }
                         if (isset($att_cols['late_time']))           { $cols[] = 'late_time';           $vals[] = "'00:00:00'"; }
                         if (isset($att_cols['manual_entry_reason'])) { $cols[] = 'manual_entry_reason'; $vals[] = "'$note'"; }
                         mysqli_query($conn, "INSERT INTO attendance (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $vals) . ")");
@@ -144,7 +175,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
                 }
             }
             $result_lines[] = "Work day " . date('d-M-Y', strtotime($work_date)) . ": marked $marked employee(s) present"
-                . ($already > 0 ? " ($already already had a punch — left unchanged)" : "") . ".";
+                . ($updated > 0 ? ", updated duty times on $updated existing swap " . ($updated > 1 ? "entries" : "entry") : "")
+                . ($already > 0 ? " ($already already had a real punch — left unchanged)" : "") . ".";
 
             // ── Absent on the work day -> 1-day unpaid leave (one-day deduction) ──
             if (!empty($absent_list)) {
@@ -276,9 +308,28 @@ th{background:var(--gray-100);color:var(--brand);}
                     </div>
                 </div>
                 <div class="row" style="margin-top:14px;">
+                    <div class="fgroup">
+                        <label>Work Day Check-In</label>
+                        <input type="time" name="work_checkin" value="07:00" style="min-width:140px;">
+                        <span class="hint">Duty start time on the worked day.</span>
+                    </div>
+                    <div class="fgroup">
+                        <label>Work Day Check-Out</label>
+                        <input type="time" name="work_checkout" value="15:50" style="min-width:140px;">
+                        <span class="hint">Default 07:00&ndash;15:50 = 8 hours duty.</span>
+                    </div>
+                    <div class="fgroup" style="flex:1;min-width:240px;">
+                        <label style="display:flex;align-items:center;gap:7px;">
+                            <input type="checkbox" name="overwrite_times" value="1" style="min-width:auto;width:16px;height:16px;">
+                            Update times on existing swap entries
+                        </label>
+                        <span class="hint">Tick to correct the duty hours on a swap you already applied for this date. Real machine punches are never changed.</span>
+                    </div>
+                </div>
+                <div class="row" style="margin-top:14px;">
                     <div class="fgroup" style="flex:1;">
                         <label>Reason / Label</label>
-                        <input type="text" name="reason" style="min-width:320px;width:100%;" placeholder="e.g. Compensatory Off — swapped with 21-Jun Sunday duty">
+                        <input type="text" name="reason" style="min-width:320px;width:100%;" placeholder="e.g. Compensatory Off (19-Jun Fri) — swapped with 21-Jun (Sun) duty">
                     </div>
                 </div>
                 <div class="row" style="margin-top:14px;">
@@ -300,7 +351,8 @@ th{background:var(--gray-100);color:var(--brand);}
         <strong>How it works &amp; what to do next:</strong>
         <ul style="margin:6px 0 0;padding-left:18px;">
             <li><strong>Off day</strong> is added to Holidays &rarr; the salary engine pays it and counts <em>no absent</em> for it.</li>
-            <li><strong>Work day</strong> &rarr; each active employee (not on leave) gets a present attendance row (check-in 07:00). Existing real punches are left untouched.</li>
+            <li><strong>Work day</strong> &rarr; each active employee (not on leave) gets a present attendance row using your <em>Check-In / Check-Out</em> times (default 07:00&ndash;15:50 = 8 hours). Existing real punches are left untouched.</li>
+            <li><strong>Already applied this swap?</strong> To fix the duty hours, enter the same Work Day, set the correct Check-In/Check-Out and tick <em>“Update times on existing swap entries”</em> &rarr; only the swap-created rows are corrected; real machine punches are never changed.</li>
             <li><strong>Absent on work day</strong> &rarr; listed User Nos are skipped (not marked present) and given a 1-day unpaid leave, so they lose exactly one day's pay for missing the compensatory duty.</li>
             <li>Sundays are already paid as present, so for a Friday&harr;Sunday swap the <em>Off day</em> alone is enough; recording the Work day just keeps the attendance report accurate.</li>
             <li><strong>Important:</strong> after applying, click <em>Regenerate Salary</em> for that month so the new figures are saved.</li>
