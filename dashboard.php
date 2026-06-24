@@ -2,6 +2,7 @@
 include 'auth.php';
 requirePermission('dashboard_view');
 include_once 'visa_helper.php';
+include_once 'passport_helper.php';
 
 $loggedInName = trim((string)($_SESSION['full_name'] ?? ''));
 $loggedInUser = trim((string)($_SESSION['username'] ?? ''));
@@ -118,6 +119,11 @@ $safe_three_months = mysqli_real_escape_string($conn, $three_months);
    within 3 months. Keeps the dashboard, employee list, and report in sync. */
 $visa_expire_count = visa_alert_count($conn);
 $expired_visas = visa_expired_list($conn);
+
+/* Passport alert count — shared logic (passport_helper.php): active (not
+   resigned/left) employees whose passport is already expired or expiring
+   within one month. */
+$passport_expire_count = passport_alert_count($conn);
 
 $totalvacationToday = 0;
 $vacationCheck = mysqli_query($conn, "SHOW TABLES LIKE 'vacations'");
@@ -494,6 +500,18 @@ body {
     transition: background .2s;
 }
 .btn-visa:hover { background: #b91c1c; }
+
+.btn-passport {
+    background: #2563a8;
+    color: #fff;
+    padding: 9px 16px;
+    text-decoration: none;
+    border-radius: 7px;
+    font-weight: 700;
+    font-size: 13px;
+    transition: background .2s;
+}
+.btn-passport:hover { background: #1a3a5c; }
 
 .btn-logout {
     background: #1e293b;
@@ -935,6 +953,11 @@ body {
             <?php if ($visa_expire_count > 0): ?>
             <a href="visa_expiring.php" target="_blank" class="btn-visa">
                 &#9888; Visa Expiring Soon: <?php echo $visa_expire_count; ?>
+            </a>
+            <?php endif; ?>
+            <?php if ($passport_expire_count > 0): ?>
+            <a href="passport_expiring.php" target="_blank" class="btn-passport">
+                &#128217; Passport Expiring Soon: <?php echo $passport_expire_count; ?>
             </a>
             <?php endif; ?>
             <a href="logout.php" class="btn-logout">&#128682; Logout</a>
