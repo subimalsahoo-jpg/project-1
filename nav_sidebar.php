@@ -128,6 +128,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('reports_view') || hasPermission('employee_view') || hasPermission('visa_insurance_view')): ?>
         <a href="visa_expiring.php" class="<?php echo appnav_active('visa_expiring.php'); ?>">&#9888; Visa Expire</a>
         <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('employee_view') || hasPermission('visa_insurance_view')): ?>
+        <a href="passport_expiring.php" class="<?php echo appnav_active('passport_expiring.php'); ?>">&#128217; Passport Expire</a>
+        <?php endif; ?>
         <?php if (hasPermission('reports_view') || hasPermission('visa_cancellation_manage')): ?>
         <a href="visa_cancellation.php" class="<?php echo appnav_active('visa_cancellation.php'); ?>">&#128203; Visa Cancellation</a>
         <?php endif; ?>
