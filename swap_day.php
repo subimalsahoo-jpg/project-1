@@ -178,17 +178,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
                 . ($updated > 0 ? ", updated duty times on $updated existing swap " . ($updated > 1 ? "entries" : "entry") : "")
                 . ($already > 0 ? " ($already already had a real punch — left unchanged)" : "") . ".";
 
-            // ── Absent on the work day -> 1-day unpaid leave (one-day deduction) ──
+            // ── Absent on the work day -> remove swap present-mark + 1-day unpaid leave ──
             if (!empty($absent_list)) {
                 if (function_exists('vacation_ensure_schema')) { vacation_ensure_schema($conn); }
                 $vreason = sd_esc($conn, $reason !== '' ? $reason : 'Absent on compensatory work day');
-                $absent_done = 0; $absent_skipped = 0;
+                $absent_done = 0; $absent_skipped = 0; $absent_cleared = 0;
                 foreach ($absent_list as $au) {
                     $auno = sd_esc($conn, $au);
                     $eq = mysqli_query($conn, "SELECT `$name_col` AS emp_name FROM employees WHERE user_no='$auno' LIMIT 1");
                     if (!$eq || mysqli_num_rows($eq) === 0) { $absent_skipped++; continue; }
                     $en = sd_esc($conn, mysqli_fetch_assoc($eq)['emp_name']);
-                    // Don't double-add if a leave already covers the work date.
+
+                    // Remove any swap-created present row for the work day so the
+                    // attendance report does NOT show them present. Only swap/manual
+                    // rows are removed (manual_entry_reason set); real machine punches
+                    // (empty reason) are never deleted.
+                    if ($has_mr) {
+                        mysqli_query($conn, "DELETE FROM attendance WHERE user_no='$auno' AND attendance_date='$wd' AND manual_entry_reason IS NOT NULL AND manual_entry_reason != ''");
+                        $absent_cleared += mysqli_affected_rows($conn);
+                    }
+
+                    // Add a 1-day unpaid leave (one-day deduction) unless one already covers the date.
                     $vex = mysqli_query($conn, "SELECT id FROM vacations WHERE user_no='$auno' AND '$wd' BETWEEN from_date AND to_date LIMIT 1");
                     if ($vex && mysqli_num_rows($vex) > 0) { $absent_skipped++; continue; }
                     mysqli_query($conn, "
@@ -199,8 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
                     ");
                     $absent_done++;
                 }
-                $result_lines[] = "Absent on work day: applied a 1-day unpaid leave (one-day deduction) to $absent_done employee(s)"
-                    . ($absent_skipped > 0 ? " ($absent_skipped skipped — unknown user or already on leave)" : "") . ".";
+                $result_lines[] = "Absent on work day: removed $absent_cleared swap present-mark(s); applied a 1-day unpaid leave (one-day deduction) to $absent_done employee(s)"
+                    . ($absent_skipped > 0 ? " ($absent_skipped already had the unpaid leave, or unknown user)" : "") . ".";
             }
         }
 
@@ -353,7 +363,7 @@ th{background:var(--gray-100);color:var(--brand);}
             <li><strong>Off day</strong> is added to Holidays &rarr; the salary engine pays it and counts <em>no absent</em> for it.</li>
             <li><strong>Work day</strong> &rarr; each active employee (not on leave) gets a present attendance row using your <em>Check-In / Check-Out</em> times (default 07:00&ndash;15:50 = 8 hours). Existing real punches are left untouched.</li>
             <li><strong>Already applied this swap?</strong> To fix the duty hours, enter the same Work Day, set the correct Check-In/Check-Out and tick <em>“Update times on existing swap entries”</em> &rarr; only the swap-created rows are corrected; real machine punches are never changed.</li>
-            <li><strong>Absent on work day</strong> &rarr; listed User Nos are skipped (not marked present) and given a 1-day unpaid leave, so they lose exactly one day's pay for missing the compensatory duty.</li>
+            <li><strong>Absent on work day</strong> &rarr; listed User Nos are not marked present, any earlier swap present-mark for them is removed (so they show absent), and they get a 1-day unpaid leave &mdash; losing exactly one day's pay for missing the compensatory duty. Real machine punches are never removed.</li>
             <li>Sundays are already paid as present, so for a Friday&harr;Sunday swap the <em>Off day</em> alone is enough; recording the Work day just keeps the attendance report accurate.</li>
             <li><strong>Important:</strong> after applying, click <em>Regenerate Salary</em> for that month so the new figures are saved.</li>
         </ul>
