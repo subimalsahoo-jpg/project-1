@@ -1033,11 +1033,11 @@ textarea { height: 48px; resize: vertical; }
             <td class="gap-cell"></td>
         </tr>
         <tr>
+            <td class="lbl">Joining Date</td>
+            <td class="fld"><input type="date" name="joining_date" value="<?= val($employee,'joining_date') ?>"></td>
+            <td class="gap-cell"></td>
             <td class="lbl">Date of Birth</td>
             <td class="fld"><input type="date" name="birthday" value="<?= val($employee,'birthday') ?>"></td>
-            <td class="gap-cell"></td>
-            <td class="lbl">SAIF Zone ID</td>
-            <td class="fld"><input type="text" name="saif_zone_id" value="<?= val($employee,'saif_zone_id') ?>"></td>
             <td class="gap-cell"></td>
         </tr>
         <tr>
@@ -1096,15 +1096,8 @@ textarea { height: 48px; resize: vertical; }
             <td class="lbl">Passport Expiry Date</td>
             <td class="fld"><input type="date" name="passport_expiry" value="<?= val($employee,'passport_expiry') ?>"></td>
             <td class="gap-cell"></td>
-            <td class="lbl">Employee Status</td>
-            <td class="fld">
-                <?php $cur_status = trim((string)($employee['employee_status'] ?? '')); if ($cur_status === '') { $cur_status = 'Active'; } ?>
-                <select name="employee_status">
-                    <?php foreach (['Active','Inactive','Resigned','Absconding','Terminated','End of Contract'] as $st): ?>
-                    <option value="<?= $st ?>" <?= strcasecmp($cur_status, $st) === 0 ? 'selected' : '' ?>><?= $st ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </td>
+            <td class="lbl">SAIF Zone ID</td>
+            <td class="fld"><input type="text" name="saif_zone_id" value="<?= val($employee,'saif_zone_id') ?>"></td>
         </tr>
         <tr>
             <td class="lbl">Emirates ID Number</td>
@@ -1135,8 +1128,15 @@ textarea { height: 48px; resize: vertical; }
             <td class="fld"><input type="text" name="previous_company" value="<?= val($employee,'previous_company') ?>"></td>
         </tr>
         <tr>
-            <td class="lbl">Joining Date</td>
-            <td class="fld"><input type="date" name="joining_date" value="<?= val($employee,'joining_date') ?>"></td>
+            <td class="lbl">Employee Status</td>
+            <td class="fld">
+                <?php $cur_status = trim((string)($employee['employee_status'] ?? '')); if ($cur_status === '') { $cur_status = 'Active'; } ?>
+                <select name="employee_status">
+                    <?php foreach (['Active','Inactive','Resigned','Absconding','Terminated','End of Contract'] as $st): ?>
+                    <option value="<?= $st ?>" <?= strcasecmp($cur_status, $st) === 0 ? 'selected' : '' ?>><?= $st ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </td>
             <td class="gap-cell"></td>
             <td class="lbl">Resign Date</td>
             <td class="fld"><input type="date" name="resign_date" value="<?= val($employee,'resign_date') ?>"></td>
