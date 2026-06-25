@@ -23,6 +23,16 @@ if($search != ""){
         OR employee_name LIKE '%$search_safe%'
     )";
 }
+
+/* Hide Swap-Day "Compensatory Off" entries from the vacation list and counts
+   (they are attendance adjustments, not real leaves). */
+$vacation_where .= "
+    AND (reason IS NULL OR (
+        reason NOT LIKE '%Compensatory Off%'
+        AND reason NOT LIKE '%swapped with%'
+        AND reason NOT LIKE '%day swap%'
+        AND reason NOT LIKE '%compensatory work day%'
+    ))";
 $vacation_effective_to = "COALESCE(NULLIF(l.return_date,'0000-00-00'), l.to_date)";
 
 /* Vacation Details - no month filter, show all or search only */
