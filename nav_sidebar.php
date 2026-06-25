@@ -22,6 +22,8 @@ $appnav_logo = function_exists('company_logo_img')
 ?>
 <style>
 /* ── Shared side panel (scoped) ── */
+/* Global UI scale: show the whole app at ~80% (like browser zoom 80%). */
+html { zoom: 0.8; }
 body { padding-left: 250px; }
 .appnav {
     position: fixed; top: 0; left: 0; width: 250px; height: 100vh; z-index: 1200;
@@ -74,6 +76,7 @@ body { padding-left: 250px; }
     .appnav-backdrop.open { display: block; }
 }
 @media print {
+    html { zoom: 1 !important; }
     body { padding-left: 0 !important; }
     .appnav, .appnav-toggle, .appnav-backdrop { display: none !important; }
 }
