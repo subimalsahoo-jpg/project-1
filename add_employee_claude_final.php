@@ -429,23 +429,17 @@ if (isset($_POST['save_employee']) || isset($_POST['update_employee'])) {
         }
     }
 
-    // Duplicate check
+    // Duplicate check — only User No must be unique.
+    // Card No (Bio Met No) is allowed to repeat across employees.
     $dup_user_no = esc($conn, $data['user_no']);
-    $dup_card_no = esc($conn, $data['card_no']);
-    $dup_conditions = ["user_no='$dup_user_no'"];
-
-    if ($dup_card_no !== '') {
-        $dup_conditions[] = "card_no='$dup_card_no'";
-    }
-
-    $dup_sql = "SELECT id FROM employees WHERE (" . implode(" OR ", $dup_conditions) . ")";
+    $dup_sql = "SELECT id FROM employees WHERE user_no='$dup_user_no'";
     if ($id !== '') {
         $dup_sql .= " AND id != '" . esc($conn, $id) . "'";
     }
     $duplicate = mysqli_query($conn, $dup_sql);
 
     if ($duplicate && mysqli_num_rows($duplicate) > 0) {
-        $message = "<div class='message error'>Duplicate User No or Card No already exists!</div>";
+        $message = "<div class='message error'>Duplicate User No already exists!</div>";
     } else {
         $ok = save_employee_values($conn, $employees_columns, $data, $photo, $id ?: null);
         if ($ok) {
