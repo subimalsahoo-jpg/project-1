@@ -118,6 +118,22 @@ if (!function_exists('acc_find_employee')) {
     }
 }
 
+if (!function_exists('acc_employee_count')) {
+    /* Allocated employee count for a gender, optionally by main location. */
+    function acc_employee_count($conn, $gender, $location = '') {
+        $g = acc_esc($conn, $gender);
+        $where = "r.gender='$g'";
+        if ($location !== '') { $where .= " AND r.main_location='" . acc_esc($conn, $location) . "'"; }
+        $q = mysqli_query($conn, "
+            SELECT COUNT(*) AS c
+            FROM accommodation_allocations a
+            JOIN accommodation_rooms r ON r.id = a.room_id
+            WHERE $where
+        ");
+        return $q ? (int)(mysqli_fetch_assoc($q)['c'] ?? 0) : 0;
+    }
+}
+
 if (!function_exists('acc_employee_current')) {
     /* Where an employee is currently allocated (room + allocation), or null. */
     function acc_employee_current($conn, $user_no) {

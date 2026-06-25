@@ -15,6 +15,7 @@ $flash_type = 'ok';
 
 $gender  = ($_GET['gender'] ?? '') === 'Girls' ? 'Girls' : (($_GET['gender'] ?? '') === 'Boys' ? 'Boys' : '');
 $room_id = (int)($_GET['room_id'] ?? 0);
+$loc     = in_array($_GET['loc'] ?? '', $LOCATIONS, true) ? $_GET['loc'] : '';
 
 /* ─────────────────────────────────────────────
    POST actions
@@ -137,6 +138,17 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .choice .ic{font-size:46px;}
 .choice .t{font-size:19px;font-weight:800;margin-top:10px;}
 .choice .s{font-size:12px;color:var(--gray-600);margin-top:4px;}
+.choice .count{font-size:34px;font-weight:800;color:var(--brand-mid);margin-top:8px;line-height:1;}
+.choice .count-lbl{font-size:12px;color:var(--gray-600);margin-top:2px;}
+.choice .split{font-size:12px;color:var(--gray-800);margin-top:8px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:6px;padding:5px 8px;display:inline-block;}
+.loctabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.loctab{padding:7px 16px;border-radius:20px;text-decoration:none;font-size:13px;font-weight:700;background:#fff;color:var(--brand);border:1px solid var(--gray-200);}
+.loctab.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.scards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.scard{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;}
+.scard .l{font-size:12px;color:var(--gray-600);text-transform:uppercase;}
+.scard .v{font-size:24px;font-weight:800;color:var(--brand);margin-top:3px;}
+@media(max-width:760px){.scards{grid-template-columns:repeat(2,1fr);}}
 .panel{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden;}
 .panel-head{background:var(--brand);color:#fff;padding:11px 16px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;}
 .panel-body{padding:16px;}
@@ -192,23 +204,56 @@ tbody td.l{text-align:left;}
         <div class="flash <?php echo $flash_type; ?>"><?php echo $flash; ?></div>
     <?php endif; ?>
 
-<?php if ($gender === ''): /* ── Landing ── */ ?>
+<?php if ($gender === ''): /* ── Landing ── */
+    $boys_total = acc_employee_count($conn, 'Boys');
+    $boys_saif  = acc_employee_count($conn, 'Boys', 'Saif Zone');
+    $boys_out   = acc_employee_count($conn, 'Boys', 'Out Side');
+    $girls_total = acc_employee_count($conn, 'Girls');
+    $girls_saif  = acc_employee_count($conn, 'Girls', 'Saif Zone');
+    $girls_out   = acc_employee_count($conn, 'Girls', 'Out Side');
+?>
     <div class="landing">
         <a class="choice" href="accommodation.php?gender=Boys">
             <div class="ic">&#128102;</div>
             <div class="t">Boys Accommodation</div>
-            <div class="s">Details (Saif Zone)</div>
+            <div class="count"><?php echo $boys_total; ?></div>
+            <div class="count-lbl">Boys employees housed</div>
+            <div class="split">Saif Zone: <b><?php echo $boys_saif; ?></b> &middot; Out Side: <b><?php echo $boys_out; ?></b></div>
         </a>
         <a class="choice" href="accommodation.php?gender=Girls">
             <div class="ic">&#128103;</div>
             <div class="t">Girls Accommodation</div>
-            <div class="s">Details (Saif Zone)</div>
+            <div class="count"><?php echo $girls_total; ?></div>
+            <div class="count-lbl">Girls employees housed</div>
+            <div class="split">Saif Zone: <b><?php echo $girls_saif; ?></b> &middot; Out Side: <b><?php echo $girls_out; ?></b></div>
         </a>
     </div>
 
-<?php elseif (!$room): /* ── Room list for a gender ── */ ?>
+<?php elseif (!$room): /* ── Room list for a gender ── */
+    $emp_total = acc_employee_count($conn, $gender);
+    $emp_saif  = acc_employee_count($conn, $gender, 'Saif Zone');
+    $emp_out   = acc_employee_count($conn, $gender, 'Out Side');
+    $rooms = acc_rooms_with_counts($conn, $gender, $loc);
+    $cap_sum = 0; $free_sum = 0;
+    foreach ($rooms as $rm) { $cap_sum += (int)$rm['capacity']; $free_sum += (int)$rm['free_space']; }
+?>
+    <!-- Location tabs -->
+    <div class="loctabs">
+        <a class="loctab <?php echo $loc === '' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>">All Locations</a>
+        <a class="loctab <?php echo $loc === 'Saif Zone' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>&loc=Saif+Zone">Saif Zone</a>
+        <a class="loctab <?php echo $loc === 'Out Side' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>&loc=Out+Side">Out Side (outside Saif Zone)</a>
+    </div>
+
+    <!-- Summary -->
+    <div class="scards">
+        <div class="scard"><div class="l">Total <?php echo $gender; ?> Housed</div><div class="v"><?php echo $emp_total; ?></div></div>
+        <div class="scard"><div class="l">In Saif Zone</div><div class="v"><?php echo $emp_saif; ?></div></div>
+        <div class="scard"><div class="l">Out Side</div><div class="v"><?php echo $emp_out; ?></div></div>
+        <div class="scard"><div class="l">Free Space<?php echo $loc !== '' ? ' (' . ac_h($loc) . ')' : ''; ?></div><div class="v" style="color:var(--green);"><?php echo $free_sum; ?></div></div>
+    </div>
+
     <div class="panel">
-        <div class="panel-head"><?php echo $gender; ?> Accommodation Details</div>
+        <div class="panel-head"><?php echo $gender; ?> Accommodation Details<?php echo $loc !== '' ? ' &middot; ' . ac_h($loc) : ' &middot; All Locations'; ?></div>
         <div class="panel-body">
             <div class="table-wrap">
             <table>
@@ -220,7 +265,6 @@ tbody td.l{text-align:left;}
                 </thead>
                 <tbody>
                 <?php
-                $rooms = acc_rooms_with_counts($conn, $gender);
                 if (!empty($rooms)): $sl = 1; foreach ($rooms as $rm):
                 ?>
                     <tr>
@@ -241,7 +285,7 @@ tbody td.l{text-align:left;}
                         </td>
                     </tr>
                 <?php endforeach; else: ?>
-                    <tr><td colspan="8" class="muted" style="padding:18px;">No rooms yet. Add one below.</td></tr>
+                    <tr><td colspan="8" class="muted" style="padding:18px;">No rooms<?php echo $loc !== '' ? ' in ' . ac_h($loc) : ''; ?> yet. Add one below.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -258,8 +302,8 @@ tbody td.l{text-align:left;}
                 <div class="fg">
                     <label>Main Location</label>
                     <select name="main_location">
-                        <?php foreach ($LOCATIONS as $loc): ?>
-                        <option value="<?php echo ac_h($loc); ?>"><?php echo ac_h($loc); ?></option>
+                        <?php foreach ($LOCATIONS as $locopt): ?>
+                        <option value="<?php echo ac_h($locopt); ?>" <?php echo ($loc !== '' && $loc === $locopt) ? 'selected' : ''; ?>><?php echo ac_h($locopt); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
