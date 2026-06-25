@@ -129,8 +129,10 @@ $totalvacationToday = 0;
 $vacationCheck = mysqli_query($conn, "SHOW TABLES LIKE 'vacations'");
 if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
     $totalvacationToday = safe_count($conn, "
-        SELECT COUNT(*) AS total FROM vacations
-        WHERE '$safe_today' BETWEEN from_date AND to_date
+        SELECT COUNT(DISTINCT user_no) AS total FROM vacations
+        WHERE from_date <= '$safe_today'
+          AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > '$safe_today')
+          AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
     ");
 }
 
@@ -151,7 +153,9 @@ if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
         SELECT COUNT(DISTINCT v.user_no) AS total
         FROM vacations v
         INNER JOIN employees e ON e.user_no = v.user_no
-        WHERE '$safe_today' BETWEEN v.from_date AND v.to_date
+        WHERE v.from_date <= '$safe_today'
+        AND (v.return_date IS NULL OR v.return_date='' OR v.return_date='0000-00-00' OR v.return_date > '$safe_today')
+        AND COALESCE(v.vacation_status,'') NOT IN ('Cancelled','Returned')
         AND $active_vacation_condition
     ");
     $activeEmployees = max(0, $activeEmployees - $activeVacationToday);

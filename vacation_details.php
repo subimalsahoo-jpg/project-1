@@ -82,9 +82,8 @@ $current_vacation_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total
     FROM vacations
     WHERE from_date <= '$today'
-      AND to_date >= '$today'
       AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > '$today')
-      AND COALESCE(vacation_status,'') != 'Cancelled'
+      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
       $vacation_where
 ");
 $current_on_vacation = (int)(mysqli_fetch_assoc($current_vacation_query)['total'] ?? 0);
