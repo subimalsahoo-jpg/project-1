@@ -232,17 +232,7 @@ if ($employee_name_raw !== '' || $user_no_raw !== '') {
             $swu    = mysqli_real_escape_string($conn, $wu);
             $cutoff = $work_to;
 
-            // Vacation cutoff
-            $vq = mysqli_query($conn, "
-                SELECT MIN(from_date) AS first_vacation_date FROM vacations
-                WHERE user_no='$swu' AND from_date <= '$safe_wt' AND to_date >= '$safe_wf'
-            ");
-            if ($vq && ($vr = mysqli_fetch_assoc($vq)) && !empty($vr['first_vacation_date'])) {
-                $vc = date('Y-m-d', strtotime($vr['first_vacation_date'] . ' -1 day'));
-                if ($vc < $cutoff) $cutoff = $vc;
-            }
-
-            // Resign cutoff
+            // Resign cutoff — a resigned employee is gone for the rest of the period.
             $rq = mysqli_query($conn, "
                 SELECT resign_date FROM employees
                 WHERE user_no='$swu' AND resign_date IS NOT NULL AND resign_date != '' LIMIT 1
@@ -270,6 +260,25 @@ if ($employee_name_raw !== '' || $user_no_raw !== '') {
 
             $hqq = mysqli_query($conn, "SELECT holiday_date FROM holidays WHERE holiday_date BETWEEN '$safe_wf' AND '$sc'");
             if ($hqq) while ($hqr = mysqli_fetch_assoc($hqq)) $present_dates[$hqr['holiday_date']] = true;
+
+            // Subtract vacation / unpaid-leave days (each is unpaid -> not a working day).
+            // Done per-day so a single mid-month leave deducts ONLY that day and does NOT
+            // truncate the rest of the period. This matches the salary engine, which zeroes
+            // individual vacation days rather than stopping at the first one.
+            $vrq = mysqli_query($conn, "
+                SELECT from_date, to_date FROM vacations
+                WHERE user_no='$swu' AND from_date <= '$sc' AND to_date >= '$safe_wf'
+            ");
+            if ($vrq) {
+                while ($vrr = mysqli_fetch_assoc($vrq)) {
+                    if (empty($vrr['from_date']) || empty($vrr['to_date'])) continue;
+                    $vs = max(strtotime($work_from), strtotime($vrr['from_date']));
+                    $ve = min(strtotime($cutoff),   strtotime($vrr['to_date']));
+                    for ($vd = $vs; $vd <= $ve; $vd = strtotime('+1 day', $vd)) {
+                        unset($present_dates[date('Y-m-d', $vd)]);
+                    }
+                }
+            }
 
             $employee_total_work_days += count($present_dates);
         }
