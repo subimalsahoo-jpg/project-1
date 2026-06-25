@@ -192,6 +192,14 @@ function employee_data_from_post() {
     $insurance_expiry = normalize_input_date(post_val('insurance_expiry_date'));
     $resign_date     = normalize_input_date(post_val('resign_date'));
 
+    // Auto-mark Resigned once the resign date has passed (unless another
+    // departed status was explicitly chosen).
+    $emp_status = post_val('employee_status', 'Active');
+    if ($resign_date !== '' && $resign_date !== '0000-00-00' && $resign_date <= date('Y-m-d')
+        && ($emp_status === '' || strcasecmp($emp_status, 'Active') === 0)) {
+        $emp_status = 'Resigned';
+    }
+
     return [
         'user_no'          => post_val('user_no'),
 
@@ -204,7 +212,7 @@ function employee_data_from_post() {
         'full_name'        => post_val('full_name'),
         'gender'           => post_val('gender'),
         'department'       => post_val('department'),
-        'employee_status'  => post_val('employee_status', 'Active'),
+        'employee_status'  => $emp_status,
         'designation'      => post_val('designation'),
         'birthday'         => $birthday,
         'joining_date'     => $joining_date,
@@ -926,13 +934,27 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
 
         <div class="form-group">
             <label>Employee Status</label>
+            <?php
+            // Auto-show "Resigned" when the resign date has passed and the
+            // saved status is still Active/blank (so saving persists it).
+            $ev_status   = val($search_employee, 'employee_status');
+            $ev_resign   = val($search_employee, 'resign_date');
+            $ev_effective = $ev_status;
+            if (($ev_status === '' || strcasecmp($ev_status, 'Active') === 0)
+                && $ev_resign !== '' && $ev_resign !== '0000-00-00'
+                && strtotime($ev_resign) !== false && $ev_resign <= date('Y-m-d')) {
+                $ev_effective = 'Resigned';
+            }
+            if ($ev_effective === '') { $ev_effective = 'Active'; }
+            $ev_opt = function($v) use ($ev_effective) { return $ev_effective === $v ? 'selected' : ''; };
+            ?>
             <select name="employee_status">
-                <option value="Active"   <?php echo selected($search_employee, 'employee_status', 'Active'); ?>>Active</option>
-                <option value="Inactive" <?php echo selected($search_employee, 'employee_status', 'Inactive'); ?>>Inactive</option>
-                <option value="Resigned" <?php echo selected($search_employee, 'employee_status', 'Resigned'); ?>>Resigned</option>
-                <option value="Absconding" <?php echo selected($search_employee, 'employee_status', 'Absconding'); ?>>Absconding</option>
-                <option value="Terminated" <?php echo selected($search_employee, 'employee_status', 'Terminated'); ?>>Terminated</option>
-                <option value="End of Contract" <?php echo selected($search_employee, 'employee_status', 'End of Contract'); ?>>End of Contract</option>
+                <option value="Active"   <?php echo $ev_opt('Active'); ?>>Active</option>
+                <option value="Inactive" <?php echo $ev_opt('Inactive'); ?>>Inactive</option>
+                <option value="Resigned" <?php echo $ev_opt('Resigned'); ?>>Resigned</option>
+                <option value="Absconding" <?php echo $ev_opt('Absconding'); ?>>Absconding</option>
+                <option value="Terminated" <?php echo $ev_opt('Terminated'); ?>>Terminated</option>
+                <option value="End of Contract" <?php echo $ev_opt('End of Contract'); ?>>End of Contract</option>
             </select>
         </div>
 

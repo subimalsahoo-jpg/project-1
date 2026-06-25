@@ -173,6 +173,16 @@ if (isset($_POST['save_employee']) && $canEditEmployee) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
+    // Auto-mark Resigned when the resign date has passed (status isn't a
+    // field on this form, so set it here). Keeps an explicit departed
+    // status (Absconding/Terminated/End of Contract) untouched.
+    $ov_rd = trim($_POST['resign_date'] ?? '');
+    if ($ov_rd !== '' && $ov_rd !== '0000-00-00' && $ov_rd <= date('Y-m-d')) {
+        mysqli_query($conn, "UPDATE employees SET employee_status='Resigned'
+            WHERE id=" . (int)$id . "
+            AND (employee_status IS NULL OR employee_status='' OR LOWER(employee_status)='active')");
+    }
+
     $message = "<div class='msg success'><span>✓</span> Employee Details Updated Successfully</div>";
 }
 
