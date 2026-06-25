@@ -138,7 +138,7 @@ if (isset($_POST['save_employee']) && $canEditEmployee) {
         'emirates_id_number','saif_zone_id','visa_id_number',
         'visa_issuing_date','visa_expiry_date','uid_number',
         'insurance_number','insurance_issuing_date','insurance_expiry_date','email',
-        'previous_company','resign_date',
+        'previous_company','resign_date','employee_status',
     ];
 
     // Use prepared statement to avoid SQL injection
@@ -1096,8 +1096,15 @@ textarea { height: 48px; resize: vertical; }
             <td class="lbl">Passport Expiry Date</td>
             <td class="fld"><input type="date" name="passport_expiry" value="<?= val($employee,'passport_expiry') ?>"></td>
             <td class="gap-cell"></td>
-            <td class="lbl"></td>
-            <td class="fld"></td>
+            <td class="lbl">Employee Status</td>
+            <td class="fld">
+                <?php $cur_status = trim((string)($employee['employee_status'] ?? '')); if ($cur_status === '') { $cur_status = 'Active'; } ?>
+                <select name="employee_status">
+                    <?php foreach (['Active','Inactive','Resigned','Absconding','Terminated','End of Contract'] as $st): ?>
+                    <option value="<?= $st ?>" <?= strcasecmp($cur_status, $st) === 0 ? 'selected' : '' ?>><?= $st ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </td>
         </tr>
         <tr>
             <td class="lbl">Emirates ID Number</td>
