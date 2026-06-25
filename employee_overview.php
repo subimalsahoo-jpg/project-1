@@ -1,8 +1,39 @@
 <?php
 include 'auth.php';
 include_once 'advance_helper.php';
+require_once 'accommodation_helper.php';
 requirePermission('employee_view');
 payroll_ensure_advance_schema($conn);
+acc_ensure_schema($conn);
+
+/* Air-ticket & Visa-renewal history tables (auto-created). */
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS employee_airtickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_no VARCHAR(50) NOT NULL,
+    employee_id VARCHAR(50) DEFAULT '',
+    provided_by VARCHAR(20) DEFAULT 'Company',
+    from_location VARCHAR(120) DEFAULT '',
+    to_location VARCHAR(120) DEFAULT '',
+    travel_date DATE NULL,
+    return_date DATE NULL,
+    airline VARCHAR(120) DEFAULT '',
+    ticket_no VARCHAR(80) DEFAULT '',
+    amount DECIMAL(10,2) DEFAULT 0,
+    remarks VARCHAR(255) DEFAULT '',
+    created_by VARCHAR(100) DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS employee_visa_renewals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_no VARCHAR(50) NOT NULL,
+    employee_id VARCHAR(50) DEFAULT '',
+    renew_from DATE NULL,
+    renew_to DATE NULL,
+    cost DECIMAL(10,2) DEFAULT 0,
+    remarks VARCHAR(255) DEFAULT '',
+    created_by VARCHAR(100) DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // ─── Auth check ───────────────────────────────────────────────────────────────
 // ─── Auto-add missing columns (employees) ────────────────────────────────────
@@ -143,6 +174,57 @@ if (isset($_POST['save_employee']) && $canEditEmployee) {
     mysqli_stmt_close($stmt);
 
     $message = "<div class='msg success'><span>✓</span> Employee Details Updated Successfully</div>";
+}
+
+/* ─── Air-ticket & Visa-renewal actions ─────────────────────────────────────── */
+$ov_user = trim((string)($_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User')));
+
+if ($canEditEmployee && isset($_POST['save_airticket'])) {
+    $u  = mysqli_real_escape_string($conn, trim($_POST['user_no'] ?? ''));
+    $ei = mysqli_real_escape_string($conn, trim($_POST['employee_id'] ?? ''));
+    $pb = mysqli_real_escape_string($conn, in_array($_POST['provided_by'] ?? 'Company', ['Company','Self','Other'], true) ? $_POST['provided_by'] : 'Company');
+    $fl = mysqli_real_escape_string($conn, trim($_POST['from_location'] ?? ''));
+    $tl = mysqli_real_escape_string($conn, trim($_POST['to_location'] ?? ''));
+    $td = mysqli_real_escape_string($conn, normalize_input_date($_POST['travel_date'] ?? ''));
+    $rd = mysqli_real_escape_string($conn, normalize_input_date($_POST['return_date'] ?? ''));
+    $al = mysqli_real_escape_string($conn, trim($_POST['airline'] ?? ''));
+    $tn = mysqli_real_escape_string($conn, trim($_POST['ticket_no'] ?? ''));
+    $am = (float)($_POST['amount'] ?? 0);
+    $rk = mysqli_real_escape_string($conn, trim($_POST['remarks'] ?? ''));
+    $cb = mysqli_real_escape_string($conn, $ov_user);
+    if ($u !== '') {
+        mysqli_query($conn, "INSERT INTO employee_airtickets
+            (user_no, employee_id, provided_by, from_location, to_location, travel_date, return_date, airline, ticket_no, amount, remarks, created_by)
+            VALUES ('$u','$ei','$pb','$fl','$tl'," . ($td !== '' ? "'$td'" : "NULL") . "," . ($rd !== '' ? "'$rd'" : "NULL") . ",'$al','$tn','$am','$rk','$cb')");
+        $message = "<div class='msg success'><span>✓</span> Air ticket added.</div>";
+    }
+}
+if ($canEditEmployee && isset($_POST['delete_airticket'])) {
+    $aid = (int)$_POST['delete_airticket'];
+    if ($aid > 0) { mysqli_query($conn, "DELETE FROM employee_airtickets WHERE id=$aid"); }
+    $message = "<div class='msg success'><span>✓</span> Air ticket removed.</div>";
+}
+if ($canEditEmployee && isset($_POST['save_visarenewal'])) {
+    $u  = mysqli_real_escape_string($conn, trim($_POST['user_no'] ?? ''));
+    $ei = mysqli_real_escape_string($conn, trim($_POST['employee_id'] ?? ''));
+    $rf = mysqli_real_escape_string($conn, normalize_input_date($_POST['renew_from'] ?? ''));
+    $rt = mysqli_real_escape_string($conn, normalize_input_date($_POST['renew_to'] ?? ''));
+    $co = (float)($_POST['cost'] ?? 0);
+    $rk = mysqli_real_escape_string($conn, trim($_POST['remarks'] ?? ''));
+    $cb = mysqli_real_escape_string($conn, $ov_user);
+    if ($u !== '' && ($rf !== '' || $rt !== '')) {
+        mysqli_query($conn, "INSERT INTO employee_visa_renewals
+            (user_no, employee_id, renew_from, renew_to, cost, remarks, created_by)
+            VALUES ('$u','$ei'," . ($rf !== '' ? "'$rf'" : "NULL") . "," . ($rt !== '' ? "'$rt'" : "NULL") . ",'$co','$rk','$cb')");
+        $message = "<div class='msg success'><span>✓</span> Visa renewal added.</div>";
+    } else {
+        $message = "<div class='msg error'><span>!</span> Please provide the renewal dates.</div>";
+    }
+}
+if ($canEditEmployee && isset($_POST['delete_visarenewal'])) {
+    $vid = (int)$_POST['delete_visarenewal'];
+    if ($vid > 0) { mysqli_query($conn, "DELETE FROM employee_visa_renewals WHERE id=$vid"); }
+    $message = "<div class='msg success'><span>✓</span> Visa renewal removed.</div>";
 }
 
 // ─── Search employee ──────────────────────────────────────────────────────────
@@ -341,8 +423,9 @@ body {
 .search-wrap form {
     display: flex;
     gap: 8px;
-    flex: 1;
-    min-width: 240px;
+    flex: 0 1 430px;
+    min-width: 220px;
+    max-width: 460px;
 }
 
 .search-input {
@@ -806,6 +889,8 @@ textarea { height: 48px; resize: vertical; }
             'attendance' => ['📅', 'Attendance'],
             'vacation'   => ['🏖️', 'Vacation'],
             'finance'    => ['💰', 'Finance'],
+            'airticket'  => ['✈️', 'Air Ticket'],
+            'visarenewal'=> ['🛂', 'Visa Renewal'],
             'complain'   => ['📝', 'Complaints'],
         ];
         foreach ($tabs as $key => [$icon, $label]):
@@ -835,6 +920,16 @@ textarea { height: 48px; resize: vertical; }
             <span>Employee ID: <?php echo val($employee, 'employee_id'); ?></span>
             <span>Department: <?php echo val($employee, 'department'); ?></span>
             <span>Designation: <?php echo val($employee, 'designation'); ?></span>
+            <?php
+            $ov_acc = function_exists('acc_employee_current') ? acc_employee_current($conn, $employee['user_no']) : null;
+            if ($ov_acc):
+            ?>
+            <span style="background:#e3f2fd;color:#1565c0;border-radius:6px;">
+                🏠 Accom: <?php echo htmlspecialchars($ov_acc['main_location'] ?? '', ENT_QUOTES); ?>
+                | Block/Tower: <?php echo htmlspecialchars($ov_acc['tower_block'] ?: '-', ENT_QUOTES); ?>
+                | Room No.: <?php echo htmlspecialchars($ov_acc['room_number'] ?: '-', ENT_QUOTES); ?>
+            </span>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -1862,6 +1957,121 @@ else: ?>
 mysqli_stmt_close($comp_stmt); ?>
 </tbody>
 </table>
+</div>
+
+<?php
+/* ══ TAB: AIR TICKET ══════════════════════════════════════════════════════ */
+elseif ($employee && $currentTab === 'airticket'):
+    $au = mysqli_real_escape_string($conn, $employee['user_no']);
+    $at_res = mysqli_query($conn, "SELECT * FROM employee_airtickets WHERE user_no='$au' ORDER BY COALESCE(travel_date, created_at) DESC, id DESC");
+    $at_total = 0.0; $at_company = 0.0; $at_rows = [];
+    if ($at_res) { while ($r = mysqli_fetch_assoc($at_res)) { $at_rows[] = $r; $at_total += (float)$r['amount']; if (strtolower($r['provided_by']) === 'company') { $at_company += (float)$r['amount']; } } }
+?>
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header">✈️ Air Ticket Details
+        <span style="float:right;font-weight:600;font-size:13px;">Company Expense: <?= fmt($at_company) ?> AED &middot; Total: <?= fmt($at_total) ?> AED</span>
+    </div>
+    <div class="card-body">
+        <?php if ($canEditEmployee): ?>
+        <form method="POST" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;">
+            <input type="hidden" name="user_no" value="<?= val($employee,'user_no') ?>">
+            <input type="hidden" name="employee_id" value="<?= val($employee,'employee_id') ?>">
+            <div><label style="font-size:12px;display:block;">Provided By</label>
+                <select name="provided_by"><option>Company</option><option>Self</option><option>Other</option></select></div>
+            <div><label style="font-size:12px;display:block;">From</label><input type="text" name="from_location" placeholder="e.g. Sharjah" required></div>
+            <div><label style="font-size:12px;display:block;">To</label><input type="text" name="to_location" placeholder="e.g. Kathmandu" required></div>
+            <div><label style="font-size:12px;display:block;">Travel Date</label><input type="date" name="travel_date"></div>
+            <div><label style="font-size:12px;display:block;">Return Date</label><input type="date" name="return_date"></div>
+            <div><label style="font-size:12px;display:block;">Airline</label><input type="text" name="airline" placeholder="optional"></div>
+            <div><label style="font-size:12px;display:block;">Ticket No</label><input type="text" name="ticket_no" placeholder="optional"></div>
+            <div><label style="font-size:12px;display:block;">Amount (AED)</label><input type="number" step="0.01" name="amount" value="0"></div>
+            <div><label style="font-size:12px;display:block;">Remarks</label><input type="text" name="remarks" placeholder="optional"></div>
+            <button type="submit" name="save_airticket" class="btn">➕ Add Ticket</button>
+        </form>
+        <?php endif; ?>
+        <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>#</th><th>Provided By</th><th>From → To</th><th>Travel</th><th>Return</th><th>Airline</th><th>Ticket No</th><th>Amount (AED)</th><th>Remarks</th><?php if ($canEditEmployee): ?><th>Action</th><?php endif; ?></tr></thead>
+            <tbody>
+            <?php if (!empty($at_rows)): $i = 1; foreach ($at_rows as $r): ?>
+                <tr>
+                    <td><?= $i++ ?></td>
+                    <td><?= htmlspecialchars($r['provided_by'], ENT_QUOTES) ?></td>
+                    <td style="text-align:left;"><b><?= htmlspecialchars($r['from_location'], ENT_QUOTES) ?></b> → <b><?= htmlspecialchars($r['to_location'], ENT_QUOTES) ?></b></td>
+                    <td><?= $r['travel_date'] ? date('d-M-Y', strtotime($r['travel_date'])) : '-' ?></td>
+                    <td><?= $r['return_date'] ? date('d-M-Y', strtotime($r['return_date'])) : '-' ?></td>
+                    <td><?= htmlspecialchars($r['airline'], ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars($r['ticket_no'], ENT_QUOTES) ?></td>
+                    <td><?= fmt((float)$r['amount']) ?></td>
+                    <td style="text-align:left;"><?= htmlspecialchars($r['remarks'], ENT_QUOTES) ?></td>
+                    <?php if ($canEditEmployee): ?>
+                    <td><form method="POST" onsubmit="return confirm('Delete this air ticket?');"><button type="submit" name="delete_airticket" value="<?= (int)$r['id'] ?>" class="btn" style="background:#fdecea;color:#c0392b;padding:6px 10px;font-size:12px;">Delete</button></form></td>
+                    <?php endif; ?>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="<?= $canEditEmployee ? 10 : 9 ?>" style="color:var(--text-dim);padding:20px;">No air ticket records yet.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<?php
+/* ══ TAB: VISA RENEWAL ════════════════════════════════════════════════════ */
+elseif ($employee && $currentTab === 'visarenewal'):
+    $vu = mysqli_real_escape_string($conn, $employee['user_no']);
+    $vr_res = mysqli_query($conn, "SELECT * FROM employee_visa_renewals WHERE user_no='$vu' ORDER BY COALESCE(renew_from, created_at) ASC, id ASC");
+    $vr_rows = []; $vr_cost = 0.0;
+    if ($vr_res) { while ($r = mysqli_fetch_assoc($vr_res)) { $vr_rows[] = $r; $vr_cost += (float)$r['cost']; } }
+    $vr_count = count($vr_rows);
+?>
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header">🛂 Visa Renewal Details
+        <span style="float:right;font-weight:600;font-size:13px;">Total Renewals: <?= $vr_count ?> &middot; Total Cost: <?= fmt($vr_cost) ?> AED</span>
+    </div>
+    <div class="card-body">
+        <?php if ($canEditEmployee): ?>
+        <form method="POST" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;">
+            <input type="hidden" name="user_no" value="<?= val($employee,'user_no') ?>">
+            <input type="hidden" name="employee_id" value="<?= val($employee,'employee_id') ?>">
+            <div><label style="font-size:12px;display:block;">Renewal From</label><input type="date" name="renew_from" required></div>
+            <div><label style="font-size:12px;display:block;">Renewal To (Expiry)</label><input type="date" name="renew_to" required></div>
+            <div><label style="font-size:12px;display:block;">Cost (AED)</label><input type="number" step="0.01" name="cost" value="0"></div>
+            <div><label style="font-size:12px;display:block;">Remarks</label><input type="text" name="remarks" placeholder="optional"></div>
+            <button type="submit" name="save_visarenewal" class="btn">➕ Add Renewal</button>
+        </form>
+        <?php endif; ?>
+        <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>Renewal #</th><th>From</th><th>To (Expiry)</th><th>Duration</th><th>Cost (AED)</th><th>Remarks</th><th>Added By</th><?php if ($canEditEmployee): ?><th>Action</th><?php endif; ?></tr></thead>
+            <tbody>
+            <?php if (!empty($vr_rows)): $i = 1; foreach ($vr_rows as $r):
+                $dur = '';
+                if (!empty($r['renew_from']) && !empty($r['renew_to'])) {
+                    $d1 = strtotime($r['renew_from']); $d2 = strtotime($r['renew_to']);
+                    if ($d1 && $d2 && $d2 >= $d1) { $dur = round(($d2 - $d1) / 86400 / 365, 1) . ' yr'; }
+                }
+            ?>
+                <tr>
+                    <td><b><?= $i++ ?></b></td>
+                    <td><?= $r['renew_from'] ? date('d-M-Y', strtotime($r['renew_from'])) : '-' ?></td>
+                    <td><?= $r['renew_to'] ? date('d-M-Y', strtotime($r['renew_to'])) : '-' ?></td>
+                    <td><?= $dur !== '' ? $dur : '-' ?></td>
+                    <td><?= fmt((float)$r['cost']) ?></td>
+                    <td style="text-align:left;"><?= htmlspecialchars($r['remarks'], ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars($r['created_by'], ENT_QUOTES) ?></td>
+                    <?php if ($canEditEmployee): ?>
+                    <td><form method="POST" onsubmit="return confirm('Delete this visa renewal?');"><button type="submit" name="delete_visarenewal" value="<?= (int)$r['id'] ?>" class="btn" style="background:#fdecea;color:#c0392b;padding:6px 10px;font-size:12px;">Delete</button></form></td>
+                    <?php endif; ?>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="<?= $canEditEmployee ? 8 : 7 ?>" style="color:var(--text-dim);padding:20px;">No visa renewal records yet.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
 </div>
 
 <?php else: ?>
