@@ -140,13 +140,18 @@ body { padding-left: 250px; }
     </div>
     <?php endif; ?>
 
-    <?php if (hasPermission('vacation_manage')): ?>
+    <?php if (hasPermission('vacation_manage') || hasPermission('leave_encashment_manage')): ?>
     <div class="appnav-title" onclick="appnavToggle('vacation')">&#127965; Vacation / Absent <span class="appnav-caret">&#9662;</span></div>
     <div class="appnav-sub" id="appnav-vacation">
+        <?php if (hasPermission('vacation_manage')): ?>
         <a href="add_vacation.php" class="<?php echo appnav_active('add_vacation.php'); ?>">&#43; Add Vacation</a>
         <a href="vacation_details.php" class="<?php echo appnav_active('vacation_details.php'); ?>">&#128197; Vacation Details</a>
         <a href="absent_details.php" class="<?php echo appnav_active('absent_details.php'); ?>">&#128197; Absent Details</a>
         <a href="holidays.php" class="<?php echo appnav_active('holidays.php'); ?>">&#127881; Holidays</a>
+        <?php endif; ?>
+        <?php if (hasPermission('vacation_manage') || hasPermission('leave_encashment_manage')): ?>
+        <a href="leave_encashment.php" class="<?php echo appnav_active('leave_encashment.php'); ?>">&#128181; Leave Encashment</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
