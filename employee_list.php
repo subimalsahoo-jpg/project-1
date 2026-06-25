@@ -98,6 +98,11 @@ if ($status_filter !== '') {
         } elseif (isset($employee_columns['status'])) {
             $where[] = "status='$safe_status'";
         }
+        // Exclude anyone effectively resigned (resign date already passed) so
+        // the Active / Inactive filters match the displayed status.
+        if (isset($employee_columns['resign_date'])) {
+            $where[] = "(resign_date IS NULL OR resign_date='' OR resign_date='0000-00-00' OR resign_date > CURDATE())";
+        }
     }
 }
 
@@ -393,7 +398,7 @@ input:focus,select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,23
 }
 .table-box{
     overflow-x:auto;
-    max-height:calc(100vh - 280px);
+    max-height:calc(100vh - 180px);
     overflow-y:auto;
 }
 table{
