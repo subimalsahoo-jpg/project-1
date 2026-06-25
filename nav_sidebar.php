@@ -87,7 +87,7 @@ body { padding-left: 250px; }
 
     <a href="dashboard.php" class="appnav-title <?php echo appnav_active('dashboard.php'); ?>">&#127968; Dashboard</a>
 
-    <?php if (hasPermission('employee_view') || hasPermission('employee_add')): ?>
+    <?php if (hasPermission('employee_view') || hasPermission('employee_add') || hasPermission('accommodation_manage')): ?>
     <div class="appnav-title" onclick="appnavToggle('emp')">&#128100; Employees <span class="appnav-caret">&#9662;</span></div>
     <div class="appnav-sub" id="appnav-emp">
         <?php if (hasPermission('employee_view')): ?>
@@ -97,6 +97,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('employee_add')): ?>
         <a href="add_employee.php" class="<?php echo appnav_active('add_employee.php'); ?>">&#43; Add Employee</a>
         <a href="employee_salary.php" class="<?php echo appnav_active('employee_salary.php'); ?>">&#128176; Salary Details</a>
+        <?php endif; ?>
+        <?php if (hasPermission('employee_view') || hasPermission('accommodation_manage')): ?>
+        <a href="accommodation.php" class="<?php echo appnav_active('accommodation.php'); ?>">&#127968; Accommodation</a>
         <?php endif; ?>
     </div>
     <?php endif; ?>
