@@ -45,21 +45,15 @@ if (!function_exists('visa_active_employee_filter')) {
     */
     function visa_active_employee_filter($conn, $today, $alias = '') {
         $p = $alias !== '' ? $alias . '.' : '';
-        $cols = visa_alert_columns($conn);
-        $status_col = isset($cols['employee_status']) ? 'employee_status'
-                    : (isset($cols['status']) ? 'status' : null);
-        $today = mysqli_real_escape_string($conn, $today);
-
-        $filter = '';
-        if ($status_col) {
-            $filter .= " AND ({$p}`$status_col` IS NULL OR {$p}`$status_col`=''"
-                     . " OR LOWER({$p}`$status_col`) NOT IN ('resign','resigned','inactive','left','terminated','absconding','end of contract'))";
+        // "Departed" is determined by VISA CANCELLATION being Completed.
+        // Notice-period / resigned-but-not-yet-cancelled employees are still
+        // on duty, so they must still appear (visa alerts, reports). Only
+        // exclude employees whose visa cancellation status is 'Completed'.
+        $vt = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
+        if ($vt && mysqli_num_rows($vt) > 0) {
+            return " AND {$p}user_no NOT IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed')";
         }
-        if (isset($cols['resign_date'])) {
-            $filter .= " AND ({$p}resign_date IS NULL OR {$p}resign_date='' OR {$p}resign_date='0000-00-00'"
-                     . " OR {$p}resign_date > '$today')";
-        }
-        return $filter;
+        return '';
     }
 }
 

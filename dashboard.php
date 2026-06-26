@@ -47,28 +47,27 @@ $status_col = isset($employee_columns_dashboard['employee_status'])
     ? 'employee_status'
     : (isset($employee_columns_dashboard['status']) ? 'status' : null);
 
-$total_employee_condition = "1=1";
-if ($status_col) {
-    $total_employee_condition .= " AND (
-        `$status_col` IS NULL
-        OR `$status_col`=''
-        OR LOWER(`$status_col`) NOT IN ('resign', 'resigned', 'absconding', 'terminated', 'end of contract')
-    )";
-}
-if (isset($employee_columns_dashboard['resign_date'])) {
-    $total_employee_condition .= " AND (resign_date IS NULL OR resign_date='' OR resign_date >= CURDATE())";
-}
+/* "Departed" is decided by VISA CANCELLATION being Completed, NOT by
+   resign_date/status. So an employee in notice period (resignation given
+   but cancellation not yet Completed) still counts as an Active employee. */
+$vc_exists_dash = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
+$not_cancelled  = ($vc_exists_dash && mysqli_num_rows($vc_exists_dash) > 0)
+    ? " AND user_no NOT IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed')"
+    : "";
 
+$total_employee_condition = "1=1" . $not_cancelled;
 $totalEmployees   = safe_count($conn, "SELECT COUNT(*) AS total FROM employees WHERE $total_employee_condition");
-$active_employee_condition = $status_col
-    ? "LOWER(`$status_col`)='active'"
-    : $total_employee_condition;
-if (isset($employee_columns_dashboard['resign_date'])) {
-    $active_employee_condition .= " AND (resign_date IS NULL OR resign_date='' OR resign_date >= CURDATE())";
+
+$active_employee_condition = "1=1" . $not_cancelled;
+if ($status_col) {
+    // Everyone who hasn't been visa-cancelled is active, except those
+    // explicitly marked Inactive.
+    $active_employee_condition .= " AND (`$status_col` IS NULL OR `$status_col`='' OR LOWER(`$status_col`)!='inactive')";
 }
 $activeEmployees = safe_count($conn, "SELECT COUNT(*) AS total FROM employees WHERE $active_employee_condition");
+
 $inactiveEmployees = $status_col
-    ? safe_count($conn, "SELECT COUNT(*) AS total FROM employees WHERE LOWER(`$status_col`)='inactive'")
+    ? safe_count($conn, "SELECT COUNT(*) AS total FROM employees WHERE LOWER(`$status_col`)='inactive'" . $not_cancelled)
     : 0;
 
 /* ─────────────────────────────────────────────
