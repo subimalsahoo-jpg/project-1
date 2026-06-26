@@ -23,11 +23,17 @@ if (!function_exists('acc_ensure_schema')) {
                 main_location VARCHAR(50) NOT NULL DEFAULT 'Saif Zone',
                 tower_block VARCHAR(100) DEFAULT '',
                 room_number VARCHAR(50) DEFAULT '',
+                room_for VARCHAR(20) DEFAULT 'Labour',
                 capacity INT NOT NULL DEFAULT 6,
                 created_by VARCHAR(100) DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        // Add room_for to an already-existing table (older installs).
+        $rf = mysqli_query($conn, "SHOW COLUMNS FROM accommodation_rooms LIKE 'room_for'");
+        if ($rf && mysqli_num_rows($rf) === 0) {
+            mysqli_query($conn, "ALTER TABLE accommodation_rooms ADD room_for VARCHAR(20) DEFAULT 'Labour' AFTER room_number");
+        }
         mysqli_query($conn, "
             CREATE TABLE IF NOT EXISTS accommodation_allocations (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -145,5 +151,36 @@ if (!function_exists('acc_employee_current')) {
             WHERE a.user_no='$u' LIMIT 1
         ");
         return ($r && mysqli_num_rows($r) > 0) ? mysqli_fetch_assoc($r) : null;
+    }
+}
+
+if (!function_exists('acc_total_housed')) {
+    /* Total employees housed across all rooms / genders / locations. */
+    function acc_total_housed($conn) {
+        $r = mysqli_query($conn, "SELECT COUNT(*) AS c FROM accommodation_allocations");
+        return $r ? (int)(mysqli_fetch_assoc($r)['c'] ?? 0) : 0;
+    }
+}
+
+if (!function_exists('acc_all_allocations')) {
+    /* Every allocated employee with their room info (for Excel export).
+       Optionally filtered by gender / main location. */
+    function acc_all_allocations($conn, $gender = '', $location = '') {
+        $where = '1=1';
+        if ($gender !== '')   { $where .= " AND r.gender='" . acc_esc($conn, $gender) . "'"; }
+        if ($location !== '') { $where .= " AND r.main_location='" . acc_esc($conn, $location) . "'"; }
+        $rows = [];
+        $q = mysqli_query($conn, "
+            SELECT a.user_no, a.employee_id, a.employee_name,
+                   e.full_name, e.department, e.designation,
+                   r.gender, r.main_location, r.tower_block, r.room_number, r.room_for, r.capacity
+            FROM accommodation_allocations a
+            JOIN accommodation_rooms r ON r.id = a.room_id
+            LEFT JOIN employees e ON e.user_no = a.user_no
+            WHERE $where
+            ORDER BY r.gender, r.main_location, r.tower_block, CAST(r.room_number AS UNSIGNED), r.room_number
+        ");
+        if ($q) { while ($row = mysqli_fetch_assoc($q)) { $rows[] = $row; } }
+        return $rows;
     }
 }
