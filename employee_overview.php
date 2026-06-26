@@ -478,10 +478,12 @@ body {
     font-size: 13px;
 }
 .employee-summary-meta span {
-    background: var(--field-bg);
-    border: 1px solid var(--border);
+    background: #1a3a5c;
+    color: #fff;
+    border: 1px solid #14304d;
     border-radius: 999px;
-    padding: 6px 10px;
+    padding: 6px 12px;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -934,7 +936,7 @@ textarea { height: 48px; resize: vertical; }
             $ov_acc = function_exists('acc_employee_current') ? acc_employee_current($conn, $employee['user_no']) : null;
             if ($ov_acc):
             ?>
-            <span style="background:#e3f2fd;color:#1565c0;border-radius:6px;">
+            <span style="background:#1565c0;color:#fff;border-color:#0d4a96;border-radius:999px;">
                 🏠 Accom: <?php echo htmlspecialchars($ov_acc['main_location'] ?? '', ENT_QUOTES); ?>
                 | Block/Tower: <?php echo htmlspecialchars($ov_acc['tower_block'] ?: '-', ENT_QUOTES); ?>
                 | Room No.: <?php echo htmlspecialchars($ov_acc['room_number'] ?: '-', ENT_QUOTES); ?>
