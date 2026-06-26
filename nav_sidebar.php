@@ -143,6 +143,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('reports_view') || hasPermission('employee_view') || hasPermission('visa_insurance_view')): ?>
         <a href="insurance_expiring.php" class="<?php echo appnav_active('insurance_expiring.php'); ?>">&#128737; Insurance Expire</a>
         <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('employee_view')): ?>
+        <a href="ex_employee_records.php" class="<?php echo appnav_active('ex_employee_records.php'); ?>">&#128188; Ex-Employee Records</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 

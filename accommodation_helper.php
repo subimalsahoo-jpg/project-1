@@ -46,6 +46,20 @@ if (!function_exists('acc_ensure_schema')) {
                 UNIQUE KEY uniq_user (user_no)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        mysqli_query($conn, "
+            CREATE TABLE IF NOT EXISTS accommodation_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_no VARCHAR(50) NOT NULL,
+                employee_id VARCHAR(50) DEFAULT '',
+                employee_name VARCHAR(150) DEFAULT '',
+                gender VARCHAR(10) DEFAULT '',
+                main_location VARCHAR(50) DEFAULT '',
+                tower_block VARCHAR(100) DEFAULT '',
+                room_number VARCHAR(50) DEFAULT '',
+                room_for VARCHAR(20) DEFAULT '',
+                removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
     }
 }
 
@@ -170,12 +184,43 @@ if (!function_exists('acc_remove_departed')) {
     function acc_remove_departed($conn) {
         $t = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
         if (!$t || mysqli_num_rows($t) === 0) { return; }
+        // Preserve each room stay in history before freeing the bed, so the
+        // ex-employee record can still show where they lived. (At removal the
+        // allocation still exists; afterwards the SELECT finds nothing, so no
+        // duplicate history rows are created.)
+        mysqli_query($conn, "
+            INSERT INTO accommodation_history
+                (user_no, employee_id, employee_name, gender, main_location, tower_block, room_number, room_for)
+            SELECT a.user_no, a.employee_id, a.employee_name,
+                   r.gender, r.main_location, r.tower_block, r.room_number, r.room_for
+            FROM accommodation_allocations a
+            JOIN accommodation_rooms r ON r.id = a.room_id
+            WHERE a.user_no IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed')
+        ");
         mysqli_query($conn, "
             DELETE FROM accommodation_allocations
             WHERE user_no IN (
                 SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed'
             )
         ");
+    }
+}
+
+if (!function_exists('acc_last_room')) {
+    /* The employee's room: current allocation if still housed, else the most
+       recent history record (after they were removed). */
+    function acc_last_room($conn, $user_no) {
+        $u = acc_esc($conn, $user_no);
+        $r = mysqli_query($conn, "
+            SELECT r.gender, r.main_location, r.tower_block, r.room_number, r.room_for
+            FROM accommodation_allocations a JOIN accommodation_rooms r ON r.id = a.room_id
+            WHERE a.user_no='$u' LIMIT 1");
+        if ($r && mysqli_num_rows($r) > 0) { return mysqli_fetch_assoc($r); }
+        $h = mysqli_query($conn, "
+            SELECT gender, main_location, tower_block, room_number, room_for
+            FROM accommodation_history WHERE user_no='$u' ORDER BY id DESC LIMIT 1");
+        if ($h && mysqli_num_rows($h) > 0) { return mysqli_fetch_assoc($h); }
+        return null;
     }
 }
 
