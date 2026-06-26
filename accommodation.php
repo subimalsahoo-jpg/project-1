@@ -46,6 +46,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flash = "Room added ($loc · " . ($tb !== '' ? $tb . ' · ' : '') . "Room $rn · $rfor).";
         }
         $gender = $g;
+    } elseif ($action === 'edit_room') {
+        $rid  = (int)($_POST['room_id'] ?? 0);
+        $g    = ($_POST['gender'] ?? '') === 'Girls' ? 'Girls' : 'Boys';
+        $eloc = in_array($_POST['main_location'] ?? '', $LOCATIONS, true) ? $_POST['main_location'] : 'Saif Zone';
+        $tb   = trim($_POST['tower_block'] ?? '');
+        $rn   = trim($_POST['room_number'] ?? '');
+        $rfor = in_array($_POST['room_for'] ?? 'Labour', ['Office Staff','Labour'], true) ? $_POST['room_for'] : 'Labour';
+        $cap  = (int)($_POST['capacity'] ?? 6);
+        if ($cap <= 0) { $cap = 6; }
+        if ($rid <= 0) {
+            $flash = 'Room not found.'; $flash_type = 'err';
+        } elseif ($rn === '') {
+            $flash = 'Room Number is required.'; $flash_type = 'err';
+        } else {
+            $el  = acc_esc($conn, $eloc);
+            $etb = acc_esc($conn, $tb);  $ern = acc_esc($conn, $rn);
+            $erf = acc_esc($conn, $rfor);
+            mysqli_query($conn, "
+                UPDATE accommodation_rooms
+                SET main_location='$el', tower_block='$etb', room_number='$ern', room_for='$erf', capacity='$cap'
+                WHERE id=$rid
+            ");
+            $flash = "Room updated ($eloc &middot; " . ($tb !== '' ? ac_h($tb) . ' &middot; ' : '') . "Room " . ac_h($rn) . ").";
+        }
+        $gender = $g;
+    } elseif ($action === 'prefix_tower') {
+        // Bulk: put "A" in front of every Tower/Block that does not already
+        // start with "A" (idempotent). Scoped to the current gender (+location).
+        $g  = ($_POST['gender'] ?? '') === 'Girls' ? 'Girls' : 'Boys';
+        $pfx = trim($_POST['prefix'] ?? 'A');
+        if ($pfx === '') { $pfx = 'A'; }
+        $eg  = acc_esc($conn, $g);
+        $epfx = acc_esc($conn, $pfx);
+        $where = "gender='$eg' AND tower_block IS NOT NULL AND tower_block <> '' AND tower_block NOT LIKE '$epfx%'";
+        if (in_array($_POST['loc'] ?? '', $LOCATIONS, true)) {
+            $where .= " AND main_location='" . acc_esc($conn, $_POST['loc']) . "'";
+        }
+        mysqli_query($conn, "UPDATE accommodation_rooms SET tower_block = CONCAT('$epfx', tower_block) WHERE $where");
+        $changed = mysqli_affected_rows($conn);
+        $flash = "Added prefix \"" . ac_h($pfx) . "\" to $changed Tower/Block value(s).";
+        $gender = $g;
+        if (in_array($_POST['loc'] ?? '', $LOCATIONS, true)) { $loc = $_POST['loc']; }
     } elseif ($action === 'delete_room') {
         $rid = (int)($_POST['room_id'] ?? 0);
         if ($rid > 0) {
@@ -176,6 +218,11 @@ if ($room_id > 0 && trim($_GET['emp_search'] ?? '') !== '') {
 
 $room = $room_id > 0 ? acc_room($conn, $room_id) : null;
 if ($room) { $gender = $room['gender']; }
+
+// Room being edited (inline edit form in the room-list view)
+$edit_room_id = (int)($_GET['edit_room'] ?? 0);
+$edit_room = $edit_room_id > 0 ? acc_room($conn, $edit_room_id) : null;
+if ($edit_room) { $gender = $edit_room['gender']; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -344,7 +391,16 @@ tbody td.l{text-align:left;}
     <div class="panel">
         <div class="panel-head">
             <span><?php echo $gender; ?> Accommodation Details<?php echo $loc !== '' ? ' &middot; ' . ac_h($loc) : ' &middot; All Locations'; ?></span>
-            <a class="btn btn-sm btn-success" href="accommodation.php?export=excel&gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">&#11015; Export Excel</a>
+            <span style="display:flex;gap:8px;">
+                <form method="POST" style="display:inline;" onsubmit="return confirm('Add \'A\' in front of every Tower/Block in this view (that does not already start with A)?');">
+                    <input type="hidden" name="action" value="prefix_tower">
+                    <input type="hidden" name="gender" value="<?php echo $gender; ?>">
+                    <input type="hidden" name="loc" value="<?php echo ac_h($loc); ?>">
+                    <input type="hidden" name="prefix" value="A">
+                    <button class="btn btn-sm btn-gray" type="submit" title="Prefix all Tower/Block numbers with A">&#9998; Add &quot;A&quot; to all Tower/Block</button>
+                </form>
+                <a class="btn btn-sm btn-success" href="accommodation.php?export=excel&gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">&#11015; Export Excel</a>
+            </span>
         </div>
         <div class="panel-body">
             <div class="table-wrap">
@@ -370,6 +426,7 @@ tbody td.l{text-align:left;}
                         <td><span class="free-pill <?php echo $rm['free_space'] > 0 ? 'free-yes' : 'free-no'; ?>"><?php echo (int)$rm['free_space']; ?></span></td>
                         <td style="white-space:nowrap;">
                             <a class="btn btn-sm btn-primary" href="accommodation.php?gender=<?php echo $gender; ?>&room_id=<?php echo (int)$rm['id']; ?>">Details</a>
+                            <a class="btn btn-sm btn-gray" href="accommodation.php?gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>&edit_room=<?php echo (int)$rm['id']; ?>#editroom">Edit</a>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this room and all its allocations?');">
                                 <input type="hidden" name="action" value="delete_room">
                                 <input type="hidden" name="room_id" value="<?php echo (int)$rm['id']; ?>">
@@ -385,6 +442,39 @@ tbody td.l{text-align:left;}
             </div>
         </div>
     </div>
+
+    <?php if ($edit_room): ?>
+    <div class="panel" id="editroom">
+        <div class="panel-head" style="background:var(--accent);color:#3a2a00;">&#9998; Edit Room (ID <?php echo (int)$edit_room['id']; ?>)</div>
+        <div class="panel-body">
+            <form method="POST" class="row">
+                <input type="hidden" name="action" value="edit_room">
+                <input type="hidden" name="room_id" value="<?php echo (int)$edit_room['id']; ?>">
+                <input type="hidden" name="gender" value="<?php echo ac_h($edit_room['gender']); ?>">
+                <div class="fg">
+                    <label>Main Location</label>
+                    <select name="main_location">
+                        <?php foreach ($LOCATIONS as $locopt): ?>
+                        <option value="<?php echo ac_h($locopt); ?>" <?php echo ($edit_room['main_location'] === $locopt) ? 'selected' : ''; ?>><?php echo ac_h($locopt); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="fg"><label>Tower / Block</label><input type="text" name="tower_block" value="<?php echo ac_h($edit_room['tower_block']); ?>" placeholder="e.g. A16"></div>
+                <div class="fg"><label>Room Number</label><input type="text" name="room_number" value="<?php echo ac_h($edit_room['room_number']); ?>" required></div>
+                <div class="fg">
+                    <label>Room For</label>
+                    <select name="room_for">
+                        <option value="Labour" <?php echo (($edit_room['room_for'] ?? 'Labour') === 'Labour') ? 'selected' : ''; ?>>Labour</option>
+                        <option value="Office Staff" <?php echo (($edit_room['room_for'] ?? '') === 'Office Staff') ? 'selected' : ''; ?>>Office Staff</option>
+                    </select>
+                </div>
+                <div class="fg"><label>Capacity</label><input type="number" name="capacity" value="<?php echo (int)$edit_room['capacity']; ?>" min="1"></div>
+                <button class="btn btn-success" type="submit">&#128190; Save Changes</button>
+                <a class="btn btn-gray" href="accommodation.php?gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">Cancel</a>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="panel">
         <div class="panel-head">Add Room</div>
