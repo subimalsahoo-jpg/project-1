@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $loc = in_array($_POST['main_location'] ?? '', $LOCATIONS, true) ? $_POST['main_location'] : 'Saif Zone';
         $tb  = trim($_POST['tower_block'] ?? '');
         $rn  = trim($_POST['room_number'] ?? '');
+        $rfor = in_array($_POST['room_for'] ?? 'Labour', ['Office Staff','Labour'], true) ? $_POST['room_for'] : 'Labour';
         $cap = (int)($_POST['capacity'] ?? 6);
         if ($cap <= 0) { $cap = 6; }
         if ($rn === '') {
@@ -35,12 +36,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $eg = acc_esc($conn, $g); $el = acc_esc($conn, $loc);
             $etb = acc_esc($conn, $tb); $ern = acc_esc($conn, $rn);
+            $erf = acc_esc($conn, $rfor);
             $ecb = acc_esc($conn, $logged_in_name);
             mysqli_query($conn, "
-                INSERT INTO accommodation_rooms (gender, main_location, tower_block, room_number, capacity, created_by)
-                VALUES ('$eg','$el','$etb','$ern','$cap','$ecb')
+                INSERT INTO accommodation_rooms (gender, main_location, tower_block, room_number, room_for, capacity, created_by)
+                VALUES ('$eg','$el','$etb','$ern','$erf','$cap','$ecb')
             ");
-            $flash = "Room added ($loc · " . ($tb !== '' ? $tb . ' · ' : '') . "Room $rn).";
+            $flash = "Room added ($loc · " . ($tb !== '' ? $tb . ' · ' : '') . "Room $rn · $rfor).";
         }
         $gender = $g;
     } elseif ($action === 'delete_room') {
@@ -93,6 +95,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+/* ─────────────────────────────────────────────
+   Excel (CSV) export of the full accommodation list
+───────────────────────────────────────────── */
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $exp_gender = ($_GET['gender'] ?? '') === 'Girls' ? 'Girls' : (($_GET['gender'] ?? '') === 'Boys' ? 'Boys' : '');
+    $exp_loc    = in_array($_GET['loc'] ?? '', $LOCATIONS, true) ? $_GET['loc'] : '';
+    $rows = acc_all_allocations($conn, $exp_gender, $exp_loc);
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="accommodation_' . ($exp_gender ?: 'all') . '_' . date('Ymd_His') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Employee Accommodation List']);
+    fputcsv($out, ['Generated', date('d-M-Y H:i')]);
+    if ($exp_gender !== '') { fputcsv($out, ['Gender', $exp_gender]); }
+    if ($exp_loc !== '')    { fputcsv($out, ['Location', $exp_loc]); }
+    fputcsv($out, ['Total', count($rows)]);
+    fputcsv($out, []);
+    fputcsv($out, ['SL','User No','Employee Name','Department','Gender','Main Location','Tower/Block','Room Number','Room For','Capacity']);
+    $sl = 1;
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            $sl++,
+            $r['user_no'],
+            $r['full_name'] ?? $r['employee_name'],
+            $r['department'] ?? '',
+            $r['gender'],
+            $r['main_location'],
+            $r['tower_block'],
+            $r['room_number'],
+            $r['room_for'] ?? '',
+            $r['capacity'],
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
 /* Employee preview (before allocating) */
 $preview_emp = null;
 $preview_current = null;
@@ -133,6 +171,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .flash.ok{background:var(--green-soft);color:var(--green);border:1px solid #b6e3c9;}
 .flash.err{background:#fdecea;color:var(--red);border:1px solid #f5c6c0;}
 .landing{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;max-width:760px;}
+.landing.landing-4{grid-template-columns:repeat(4,1fr);max-width:none;}
+.total-emp-box{background:#fff;border:1px solid var(--gray-200);border-left:5px solid var(--accent);border-radius:8px;padding:12px 18px;margin-bottom:18px;font-size:16px;font-weight:700;color:var(--brand);box-shadow:var(--shadow);display:inline-block;}
+.total-emp-box b{color:var(--brand-mid);font-size:22px;margin-left:6px;}
+.choice .sub{font-size:13px;font-weight:700;color:var(--accent);margin-top:2px;}
 .choice{background:#fff;border-radius:12px;box-shadow:var(--shadow);padding:30px;text-decoration:none;color:var(--brand);text-align:center;border:2px solid transparent;transition:.15s;}
 .choice:hover{border-color:var(--accent);transform:translateY(-2px);}
 .choice .ic{font-size:46px;}
@@ -205,27 +247,41 @@ tbody td.l{text-align:left;}
     <?php endif; ?>
 
 <?php if ($gender === ''): /* ── Landing ── */
-    $boys_total = acc_employee_count($conn, 'Boys');
     $boys_saif  = acc_employee_count($conn, 'Boys', 'Saif Zone');
     $boys_out   = acc_employee_count($conn, 'Boys', 'Out Side');
-    $girls_total = acc_employee_count($conn, 'Girls');
-    $girls_saif  = acc_employee_count($conn, 'Girls', 'Saif Zone');
-    $girls_out   = acc_employee_count($conn, 'Girls', 'Out Side');
+    $girls_saif = acc_employee_count($conn, 'Girls', 'Saif Zone');
+    $girls_out  = acc_employee_count($conn, 'Girls', 'Out Side');
+    $grand_total = acc_total_housed($conn);
 ?>
-    <div class="landing">
-        <a class="choice" href="accommodation.php?gender=Boys">
+    <div class="total-emp-box">Total Employee Housed: <b><?php echo $grand_total; ?></b></div>
+    <div class="landing landing-4">
+        <a class="choice" href="accommodation.php?gender=Boys&loc=Saif+Zone">
             <div class="ic">&#128102;</div>
             <div class="t">Boys Accommodation</div>
-            <div class="count"><?php echo $boys_total; ?></div>
+            <div class="sub">(Saif Zone)</div>
+            <div class="count"><?php echo $boys_saif; ?></div>
             <div class="count-lbl">Boys employees housed</div>
-            <div class="split">Saif Zone: <b><?php echo $boys_saif; ?></b> &middot; Out Side: <b><?php echo $boys_out; ?></b></div>
         </a>
-        <a class="choice" href="accommodation.php?gender=Girls">
+        <a class="choice" href="accommodation.php?gender=Girls&loc=Saif+Zone">
             <div class="ic">&#128103;</div>
             <div class="t">Girls Accommodation</div>
-            <div class="count"><?php echo $girls_total; ?></div>
+            <div class="sub">(Saif Zone)</div>
+            <div class="count"><?php echo $girls_saif; ?></div>
             <div class="count-lbl">Girls employees housed</div>
-            <div class="split">Saif Zone: <b><?php echo $girls_saif; ?></b> &middot; Out Side: <b><?php echo $girls_out; ?></b></div>
+        </a>
+        <a class="choice" href="accommodation.php?gender=Boys&loc=Out+Side">
+            <div class="ic">&#128102;</div>
+            <div class="t">Boys Accommodation</div>
+            <div class="sub">(Out Side)</div>
+            <div class="count"><?php echo $boys_out; ?></div>
+            <div class="count-lbl">Boys employees housed</div>
+        </a>
+        <a class="choice" href="accommodation.php?gender=Girls&loc=Out+Side">
+            <div class="ic">&#128103;</div>
+            <div class="t">Girls Accommodation</div>
+            <div class="sub">(Out Side)</div>
+            <div class="count"><?php echo $girls_out; ?></div>
+            <div class="count-lbl">Girls employees housed</div>
         </a>
     </div>
 
@@ -253,13 +309,16 @@ tbody td.l{text-align:left;}
     </div>
 
     <div class="panel">
-        <div class="panel-head"><?php echo $gender; ?> Accommodation Details<?php echo $loc !== '' ? ' &middot; ' . ac_h($loc) : ' &middot; All Locations'; ?></div>
+        <div class="panel-head">
+            <span><?php echo $gender; ?> Accommodation Details<?php echo $loc !== '' ? ' &middot; ' . ac_h($loc) : ' &middot; All Locations'; ?></span>
+            <a class="btn btn-sm btn-success" href="accommodation.php?export=excel&gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">&#11015; Export Excel</a>
+        </div>
         <div class="panel-body">
             <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>SL</th><th>Main Location</th><th>Tower / Block</th><th>Room Number</th>
+                        <th>SL</th><th>Main Location</th><th>Tower / Block</th><th>Room Number</th><th>Room For</th>
                         <th>Capacity</th><th>Allocated Employee</th><th>Free Space</th><th>Details</th>
                     </tr>
                 </thead>
@@ -272,6 +331,7 @@ tbody td.l{text-align:left;}
                         <td><?php echo ac_h($rm['main_location']); ?></td>
                         <td><?php echo ac_h($rm['tower_block']); ?></td>
                         <td><b><?php echo ac_h($rm['room_number']); ?></b></td>
+                        <td><?php echo ac_h($rm['room_for'] ?? 'Labour'); ?></td>
                         <td><?php echo (int)$rm['capacity']; ?></td>
                         <td><?php echo (int)$rm['allocated']; ?></td>
                         <td><span class="free-pill <?php echo $rm['free_space'] > 0 ? 'free-yes' : 'free-no'; ?>"><?php echo (int)$rm['free_space']; ?></span></td>
@@ -285,7 +345,7 @@ tbody td.l{text-align:left;}
                         </td>
                     </tr>
                 <?php endforeach; else: ?>
-                    <tr><td colspan="8" class="muted" style="padding:18px;">No rooms<?php echo $loc !== '' ? ' in ' . ac_h($loc) : ''; ?> yet. Add one below.</td></tr>
+                    <tr><td colspan="9" class="muted" style="padding:18px;">No rooms<?php echo $loc !== '' ? ' in ' . ac_h($loc) : ''; ?> yet. Add one below.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -309,6 +369,13 @@ tbody td.l{text-align:left;}
                 </div>
                 <div class="fg"><label>Tower / Block</label><input type="text" name="tower_block" placeholder="e.g. Tower A"></div>
                 <div class="fg"><label>Room Number</label><input type="text" name="room_number" placeholder="e.g. 101" required></div>
+                <div class="fg">
+                    <label>Room For</label>
+                    <select name="room_for">
+                        <option value="Labour">Labour</option>
+                        <option value="Office Staff">Office Staff</option>
+                    </select>
+                </div>
                 <div class="fg"><label>Capacity</label><input type="number" name="capacity" value="6" min="1"><span class="hint">Default 6.</span></div>
                 <button class="btn btn-success" type="submit">&#43; Add Room</button>
             </form>
@@ -340,13 +407,13 @@ tbody td.l{text-align:left;}
             <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>SL</th><th>Employee ID</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Action</th></tr>
+                    <tr><th>SL</th><th>User No.</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php if (!empty($emps)): $sl = 1; foreach ($emps as $e): ?>
                     <tr>
                         <td><?php echo $sl++; ?></td>
-                        <td><b><?php echo ac_h($e['employee_id'] !== '' ? $e['employee_id'] : $e['user_no']); ?></b></td>
+                        <td><b><?php echo ac_h($e['user_no']); ?></b></td>
                         <td class="l"><?php echo ac_h($e['full_name'] ?? $e['employee_name']); ?></td>
                         <td><?php echo ac_h($room['main_location']); ?></td>
                         <td><?php echo ac_h($room['tower_block']); ?></td>
