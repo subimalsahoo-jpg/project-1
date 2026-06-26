@@ -501,6 +501,9 @@ body {
 .st-absconding{background:#fee2e2;color:#b91c1c;border:2px solid #ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15);}
 .st-terminated{background:#fde2e2;color:#991b1b;border:1px solid #f87171;}
 .st-endofcontract{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;}
+.summary-status{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+.on-vacation-box{border:2px solid #e8a020;color:#c97a10;background:#fff8ee;font-weight:800;font-size:18px;padding:8px 22px;border-radius:8px;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.absconding-stamp{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-16deg);color:#c0212d;border:4px double #c0212d;border-radius:10px;font-size:46px;font-weight:900;letter-spacing:6px;padding:6px 30px;opacity:.5;pointer-events:none;text-transform:uppercase;white-space:nowrap;z-index:5;font-family:'Arial Black','Segoe UI',Arial,sans-serif;}
 
 /* ── Buttons ──────────────────────────────────────────────── */
 .btn {
@@ -969,8 +972,24 @@ textarea { height: 48px; resize: vertical; }
         }
         if ($ov_status === '') { $ov_status = 'Active'; }
         $ov_cls = 'st-' . strtolower(preg_replace('/[^a-z]/i', '', $ov_status));
+
+        // Currently on vacation? (left and not yet returned; comp-off excluded)
+        $ov_uno = mysqli_real_escape_string($conn, (string)$employee['user_no']);
+        $ov_vq = mysqli_query($conn, "
+            SELECT 1 FROM vacations
+            WHERE user_no='$ov_uno' AND from_date <= CURDATE()
+              AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > CURDATE())
+              AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
+              AND (reason IS NULL OR (reason NOT LIKE '%Compensatory Off%' AND reason NOT LIKE '%swapped with%'))
+            LIMIT 1");
+        $ov_on_vacation = ($ov_vq && mysqli_num_rows($ov_vq) > 0);
     ?>
-    <div class="status-big <?php echo $ov_cls; ?>"><?php echo htmlspecialchars($ov_status, ENT_QUOTES, 'UTF-8'); ?></div>
+    <div class="summary-status">
+        <div class="status-big <?php echo $ov_cls; ?>"><?php echo htmlspecialchars($ov_status, ENT_QUOTES, 'UTF-8'); ?></div>
+        <?php if ($ov_on_vacation): ?>
+        <div class="on-vacation-box">On Vacation</div>
+        <?php endif; ?>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -981,7 +1000,10 @@ textarea { height: 48px; resize: vertical; }
 
 <div class="card" style="margin-bottom:18px;">
     <div class="card-header">👤 Personal & Job Information</div>
-    <div class="card-body">
+    <div class="card-body" style="position:relative;">
+    <?php if (strcasecmp($ov_status, 'Absconding') === 0): ?>
+        <div class="absconding-stamp">ABSCONDING</div>
+    <?php endif; ?>
     <div class="table-scroll">
     <table class="emp-grid">
         <tr>
