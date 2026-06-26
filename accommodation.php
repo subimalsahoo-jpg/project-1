@@ -4,6 +4,7 @@ requireAnyPermission(['employee_view', 'accommodation_manage']);
 include_once 'accommodation_helper.php';
 
 acc_ensure_schema($conn);
+acc_remove_departed($conn); // drop resigned/left employees from accommodation automatically
 
 function ac_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
@@ -249,8 +250,8 @@ tbody td.l{text-align:left;}
 .emp-box b{font-size:15px;color:var(--brand);}
 .muted{color:#94a3b8;}
 .tag{display:inline-block;background:#eef3fb;color:var(--brand-mid);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;}
-.emp-photo{width:46px;height:46px;border-radius:8px;object-fit:cover;border:1px solid var(--gray-200);background:#fff;vertical-align:middle;}
-.emp-photo-none{display:inline-flex;align-items:center;justify-content:center;font-size:24px;color:#94a3b8;}
+.emp-photo{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--gray-200);background:#fff;vertical-align:middle;}
+.emp-photo-none{display:inline-flex;align-items:center;justify-content:center;width:62px;height:62px;font-size:30px;color:#94a3b8;}
 .vac-pill{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:3px 10px;font-size:12px;font-weight:700;}
 @media(max-width:760px){.landing{grid-template-columns:1fr;}}
 </style>
