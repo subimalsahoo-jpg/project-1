@@ -501,6 +501,7 @@ body {
 .st-absconding{background:#fee2e2;color:#b91c1c;border:2px solid #ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15);}
 .st-terminated{background:#fde2e2;color:#991b1b;border:1px solid #f87171;}
 .st-endofcontract{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;}
+.st-cancelled{background:#fee2e2;color:#b91c1c;border:1px solid #f87171;}
 .summary-status{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
 .on-vacation-box{border:2px solid #e8a020;color:#c97a10;background:#fff8ee;font-weight:800;font-size:18px;padding:8px 22px;border-radius:8px;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
 .absconding-stamp{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-16deg);color:#c0212d;border:4px double #c0212d;border-radius:10px;font-size:46px;font-weight:900;letter-spacing:6px;padding:6px 30px;opacity:.5;pointer-events:none;text-transform:uppercase;white-space:nowrap;z-index:5;font-family:'Arial Black','Segoe UI',Arial,sans-serif;}
@@ -963,18 +964,36 @@ textarea { height: 48px; resize: vertical; }
         </div>
     </div>
     <?php
-        $ov_status = trim((string)($employee['employee_status'] ?? ''));
-        $ov_resign = trim((string)($employee['resign_date'] ?? ''));
-        if (($ov_status === '' || strcasecmp($ov_status, 'Active') === 0)
-            && $ov_resign !== '' && $ov_resign !== '0000-00-00'
-            && strtotime($ov_resign) !== false && $ov_resign <= date('Y-m-d')) {
-            $ov_status = 'Resigned';
+        // Departure is finalised by VISA CANCELLATION: the employee stays
+        // ACTIVE here (and in Accommodation) until their visa cancellation
+        // Status is 'Completed'. When Completed, the stamp / label is taken
+        // from the cancellation Reason.
+        $ov_uno = mysqli_real_escape_string($conn, (string)$employee['user_no']);
+        $vc_completed = false; $vc_reason = '';
+        $vc_tbl = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
+        if ($vc_tbl && mysqli_num_rows($vc_tbl) > 0) {
+            $vcq = mysqli_query($conn, "SELECT cancellation_status, cancellation_reason FROM visa_cancellations WHERE user_no='$ov_uno' ORDER BY id DESC LIMIT 1");
+            if ($vcq && ($vcr = mysqli_fetch_assoc($vcq))) {
+                $vc_completed = strcasecmp(trim((string)($vcr['cancellation_status'] ?? '')), 'Completed') === 0;
+                $vc_reason    = trim((string)($vcr['cancellation_reason'] ?? ''));
+            }
         }
-        if ($ov_status === '') { $ov_status = 'Active'; }
-        $ov_cls = 'st-' . strtolower(preg_replace('/[^a-z]/i', '', $ov_status));
+        // Reason -> stamp / label text.
+        $ov_stamp = 'CANCELLED';
+        switch (strtolower($vc_reason)) {
+            case 'termination': $ov_stamp = 'TERMINATED'; break;
+            case 'absconding':  $ov_stamp = 'ABSCONDING'; break;
+            // Resignation, End of Contract, Transfer, Other -> CANCELLED
+        }
+        if ($vc_completed) {
+            $ov_status = $ov_stamp;
+            $ov_cls = 'st-' . strtolower($ov_stamp);
+        } else {
+            $ov_status = 'Active';
+            $ov_cls = 'st-active';
+        }
 
         // Currently on vacation? (left and not yet returned; comp-off excluded)
-        $ov_uno = mysqli_real_escape_string($conn, (string)$employee['user_no']);
         $ov_vq = mysqli_query($conn, "
             SELECT 1 FROM vacations
             WHERE user_no='$ov_uno' AND from_date <= CURDATE()
@@ -1001,8 +1020,8 @@ textarea { height: 48px; resize: vertical; }
 <div class="card" style="margin-bottom:18px;">
     <div class="card-header">👤 Personal & Job Information</div>
     <div class="card-body" style="position:relative;">
-    <?php if (strcasecmp($ov_status, 'Absconding') === 0): ?>
-        <div class="absconding-stamp">ABSCONDING</div>
+    <?php if (!empty($vc_completed)): ?>
+        <div class="absconding-stamp"><?php echo htmlspecialchars($ov_stamp, ENT_QUOTES, 'UTF-8'); ?></div>
     <?php endif; ?>
     <div class="table-scroll">
     <table class="emp-grid">
