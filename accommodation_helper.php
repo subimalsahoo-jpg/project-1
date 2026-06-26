@@ -98,7 +98,7 @@ if (!function_exists('acc_room_employees')) {
         $rows = [];
         $q = mysqli_query($conn, "
             SELECT a.id AS allocation_id, a.user_no, a.employee_id, a.employee_name,
-                   e.full_name, e.gender, e.department, e.designation
+                   e.full_name, e.gender, e.department, e.designation, e.photo
             FROM accommodation_allocations a
             LEFT JOIN employees e ON e.user_no = a.user_no
             WHERE a.room_id=$room_id

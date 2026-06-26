@@ -220,6 +220,8 @@ tbody td.l{text-align:left;}
 .emp-box b{font-size:15px;color:var(--brand);}
 .muted{color:#94a3b8;}
 .tag{display:inline-block;background:#eef3fb;color:var(--brand-mid);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;}
+.emp-photo{width:46px;height:46px;border-radius:8px;object-fit:cover;border:1px solid var(--gray-200);background:#fff;vertical-align:middle;}
+.emp-photo-none{display:inline-flex;align-items:center;justify-content:center;font-size:24px;color:#94a3b8;}
 @media(max-width:760px){.landing{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -407,12 +409,19 @@ tbody td.l{text-align:left;}
             <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>SL</th><th>User No.</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Action</th></tr>
+                    <tr><th>SL</th><th>Photo</th><th>User No.</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php if (!empty($emps)): $sl = 1; foreach ($emps as $e): ?>
                     <tr>
                         <td><?php echo $sl++; ?></td>
+                        <td>
+                            <?php if (!empty($e['photo'])): ?>
+                                <img src="uploads/<?php echo ac_h($e['photo']); ?>" alt="Photo" class="emp-photo">
+                            <?php else: ?>
+                                <span class="emp-photo emp-photo-none">&#128100;</span>
+                            <?php endif; ?>
+                        </td>
                         <td><b><?php echo ac_h($e['user_no']); ?></b></td>
                         <td class="l"><?php echo ac_h($e['full_name'] ?? $e['employee_name']); ?></td>
                         <td><?php echo ac_h($room['main_location']); ?></td>
@@ -429,7 +438,7 @@ tbody td.l{text-align:left;}
                         </td>
                     </tr>
                 <?php endforeach; else: ?>
-                    <tr><td colspan="8" class="muted" style="padding:18px;">No employees allocated yet.</td></tr>
+                    <tr><td colspan="9" class="muted" style="padding:18px;">No employees allocated yet.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
