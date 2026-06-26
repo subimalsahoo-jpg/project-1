@@ -486,6 +486,21 @@ body {
     font-weight: 600;
     white-space: nowrap;
 }
+.status-big{
+    font-size: 18px;
+    font-weight: 800;
+    padding: 9px 20px;
+    border-radius: 10px;
+    letter-spacing: .4px;
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+.st-active{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+.st-inactive{background:#e2e8f0;color:#475569;border:1px solid #cbd5e1;}
+.st-resigned{background:#fef3c7;color:#b45309;border:1px solid #fcd34d;}
+.st-absconding{background:#fee2e2;color:#b91c1c;border:2px solid #ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15);}
+.st-terminated{background:#fde2e2;color:#991b1b;border:1px solid #f87171;}
+.st-endofcontract{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;}
 
 /* ── Buttons ──────────────────────────────────────────────── */
 .btn {
@@ -944,6 +959,18 @@ textarea { height: 48px; resize: vertical; }
             <?php endif; ?>
         </div>
     </div>
+    <?php
+        $ov_status = trim((string)($employee['employee_status'] ?? ''));
+        $ov_resign = trim((string)($employee['resign_date'] ?? ''));
+        if (($ov_status === '' || strcasecmp($ov_status, 'Active') === 0)
+            && $ov_resign !== '' && $ov_resign !== '0000-00-00'
+            && strtotime($ov_resign) !== false && $ov_resign <= date('Y-m-d')) {
+            $ov_status = 'Resigned';
+        }
+        if ($ov_status === '') { $ov_status = 'Active'; }
+        $ov_cls = 'st-' . strtolower(preg_replace('/[^a-z]/i', '', $ov_status));
+    ?>
+    <div class="status-big <?php echo $ov_cls; ?>"><?php echo htmlspecialchars($ov_status, ENT_QUOTES, 'UTF-8'); ?></div>
 </div>
 <?php endif; ?>
 
