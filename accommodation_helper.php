@@ -162,6 +162,32 @@ if (!function_exists('acc_employee_current')) {
     }
 }
 
+if (!function_exists('acc_remove_departed')) {
+    /* Auto-remove from accommodation any employee who has left:
+       status Resigned/Resign/Absconding/Terminated/End of Contract, OR a
+       resign_date that has already passed. Frees up their room space. */
+    function acc_remove_departed($conn) {
+        $cols = [];
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM employees");
+        if ($res) { while ($c = mysqli_fetch_assoc($res)) { $cols[$c['Field']] = true; } }
+        $status_col = isset($cols['employee_status']) ? 'employee_status'
+                    : (isset($cols['status']) ? 'status' : null);
+        $conds = [];
+        if ($status_col) {
+            $conds[] = "LOWER(`$status_col`) IN ('resigned','resign','absconding','terminated','end of contract')";
+        }
+        if (isset($cols['resign_date'])) {
+            $conds[] = "(resign_date IS NOT NULL AND resign_date != '' AND resign_date != '0000-00-00' AND resign_date <= CURDATE())";
+        }
+        if (empty($conds)) { return; }
+        $cond = implode(' OR ', $conds);
+        mysqli_query($conn, "
+            DELETE FROM accommodation_allocations
+            WHERE user_no IN (SELECT user_no FROM employees WHERE $cond)
+        ");
+    }
+}
+
 if (!function_exists('acc_total_housed')) {
     /* Total employees housed across all rooms / genders / locations. */
     function acc_total_housed($conn) {
