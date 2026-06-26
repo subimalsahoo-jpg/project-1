@@ -98,7 +98,15 @@ if (!function_exists('acc_room_employees')) {
         $rows = [];
         $q = mysqli_query($conn, "
             SELECT a.id AS allocation_id, a.user_no, a.employee_id, a.employee_name,
-                   e.full_name, e.gender, e.department, e.designation, e.photo
+                   e.full_name, e.gender, e.department, e.designation, e.photo,
+                   EXISTS (
+                       SELECT 1 FROM vacations v
+                       WHERE v.user_no = a.user_no
+                       AND v.from_date <= CURDATE()
+                       AND (v.return_date IS NULL OR v.return_date='' OR v.return_date='0000-00-00' OR v.return_date > CURDATE())
+                       AND COALESCE(v.vacation_status,'') NOT IN ('Cancelled','Returned')
+                       AND (v.reason IS NULL OR (v.reason NOT LIKE '%Compensatory Off%' AND v.reason NOT LIKE '%swapped with%'))
+                   ) AS on_vacation
             FROM accommodation_allocations a
             LEFT JOIN employees e ON e.user_no = a.user_no
             WHERE a.room_id=$room_id
@@ -173,12 +181,20 @@ if (!function_exists('acc_all_allocations')) {
         $q = mysqli_query($conn, "
             SELECT a.user_no, a.employee_id, a.employee_name,
                    e.full_name, e.department, e.designation,
-                   r.gender, r.main_location, r.tower_block, r.room_number, r.room_for, r.capacity
+                   r.id AS room_id, r.gender, r.main_location, r.tower_block, r.room_number, r.room_for, r.capacity,
+                   EXISTS (
+                       SELECT 1 FROM vacations v
+                       WHERE v.user_no = a.user_no
+                       AND v.from_date <= CURDATE()
+                       AND (v.return_date IS NULL OR v.return_date='' OR v.return_date='0000-00-00' OR v.return_date > CURDATE())
+                       AND COALESCE(v.vacation_status,'') NOT IN ('Cancelled','Returned')
+                       AND (v.reason IS NULL OR (v.reason NOT LIKE '%Compensatory Off%' AND v.reason NOT LIKE '%swapped with%'))
+                   ) AS on_vacation
             FROM accommodation_allocations a
             JOIN accommodation_rooms r ON r.id = a.room_id
             LEFT JOIN employees e ON e.user_no = a.user_no
             WHERE $where
-            ORDER BY r.gender, r.main_location, r.tower_block, CAST(r.room_number AS UNSIGNED), r.room_number
+            ORDER BY r.gender, r.main_location, r.tower_block, CAST(r.room_number AS UNSIGNED), r.room_number, CAST(a.user_no AS UNSIGNED), a.user_no
         ");
         if ($q) { while ($row = mysqli_fetch_assoc($q)) { $rows[] = $row; } }
         return $rows;
