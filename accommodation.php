@@ -102,32 +102,61 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     $exp_gender = ($_GET['gender'] ?? '') === 'Girls' ? 'Girls' : (($_GET['gender'] ?? '') === 'Boys' ? 'Boys' : '');
     $exp_loc    = in_array($_GET['loc'] ?? '', $LOCATIONS, true) ? $_GET['loc'] : '';
     $rows = acc_all_allocations($conn, $exp_gender, $exp_loc);
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="accommodation_' . ($exp_gender ?: 'all') . '_' . date('Ymd_His') . '.csv"');
-    $out = fopen('php://output', 'w');
-    fputcsv($out, ['Employee Accommodation List']);
-    fputcsv($out, ['Generated', date('d-M-Y H:i')]);
-    if ($exp_gender !== '') { fputcsv($out, ['Gender', $exp_gender]); }
-    if ($exp_loc !== '')    { fputcsv($out, ['Location', $exp_loc]); }
-    fputcsv($out, ['Total', count($rows)]);
-    fputcsv($out, []);
-    fputcsv($out, ['SL','User No','Employee Name','Department','Gender','Main Location','Tower/Block','Room Number','Room For','Capacity']);
-    $sl = 1;
+
+    // Group allocations by room (preserving the query order) so that the
+    // room columns (Tower/Block, Room Number, Capacity, Space Due) can be
+    // merged (rowspan) for all employees sharing a room.
+    $ordered = [];
+    $groups  = [];
     foreach ($rows as $r) {
-        fputcsv($out, [
-            $sl++,
-            $r['user_no'],
-            $r['full_name'] ?? $r['employee_name'],
-            $r['department'] ?? '',
-            $r['gender'],
-            $r['main_location'],
-            $r['tower_block'],
-            $r['room_number'],
-            $r['room_for'] ?? '',
-            $r['capacity'],
-        ]);
+        $rid = $r['room_id'];
+        if (!isset($groups[$rid])) { $groups[$rid] = []; $ordered[] = $rid; }
+        $groups[$rid][] = $r;
     }
-    fclose($out);
+
+    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    header('Content-Disposition: attachment; filename="accommodation_' . ($exp_gender ?: 'all') . '_' . date('Ymd_His') . '.xls"');
+    echo "<html><head><meta charset=\"utf-8\"></head><body>";
+    echo "<table border=\"1\" cellspacing=\"0\" cellpadding=\"5\" style=\"border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:12px;\">";
+    $title = 'Employee Accommodation List' . ($exp_gender !== '' ? ' — ' . $exp_gender : '') . ($exp_loc !== '' ? ' (' . $exp_loc . ')' : '');
+    echo "<tr><td colspan=\"12\" style=\"font-size:15px;font-weight:bold;\">" . htmlspecialchars($title) . "</td></tr>";
+    $th = "background:#1a3a5c;color:#ffffff;font-weight:bold;text-align:center;";
+    $mc = "text-align:center;vertical-align:middle;";
+    echo "<tr>";
+    foreach (['SL','User No','Employee Name','Department','Gender','Main Location','Tower/Block','Room Number','Room For','Capacity','Space Due','Vacation'] as $h) {
+        echo "<td style=\"$th\">" . htmlspecialchars($h) . "</td>";
+    }
+    echo "</tr>";
+
+    $sl = 1;
+    foreach ($ordered as $rid) {
+        $grp  = $groups[$rid];
+        $n    = count($grp);
+        $cap  = (int)$grp[0]['capacity'];
+        $free = max(0, $cap - $n);
+        foreach ($grp as $i => $r) {
+            $onvac = (int)$r['on_vacation'] === 1;
+            echo "<tr>";
+            echo "<td style=\"text-align:center;\">" . ($sl++) . "</td>";
+            echo "<td>" . htmlspecialchars($r['user_no']) . "</td>";
+            echo "<td>" . htmlspecialchars($r['full_name'] ?? $r['employee_name']) . "</td>";
+            echo "<td>" . htmlspecialchars($r['department'] ?? '') . "</td>";
+            echo "<td style=\"text-align:center;\">" . htmlspecialchars($r['gender']) . "</td>";
+            echo "<td>" . htmlspecialchars($r['main_location']) . "</td>";
+            if ($i === 0) {
+                echo "<td rowspan=\"$n\" style=\"$mc\">" . htmlspecialchars($r['tower_block']) . "</td>";
+                echo "<td rowspan=\"$n\" style=\"$mc\">" . htmlspecialchars($r['room_number']) . "</td>";
+            }
+            echo "<td style=\"text-align:center;\">" . htmlspecialchars($r['room_for'] ?? '') . "</td>";
+            if ($i === 0) {
+                echo "<td rowspan=\"$n\" style=\"$mc\">" . $cap . "</td>";
+                echo "<td rowspan=\"$n\" style=\"$mc\">" . $free . "</td>";
+            }
+            echo "<td style=\"text-align:center;" . ($onvac ? "color:#b91c1c;font-weight:bold;" : "") . "\">" . ($onvac ? 'On Vacation' : '') . "</td>";
+            echo "</tr>";
+        }
+    }
+    echo "</table></body></html>";
     exit;
 }
 
@@ -222,6 +251,7 @@ tbody td.l{text-align:left;}
 .tag{display:inline-block;background:#eef3fb;color:var(--brand-mid);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;}
 .emp-photo{width:46px;height:46px;border-radius:8px;object-fit:cover;border:1px solid var(--gray-200);background:#fff;vertical-align:middle;}
 .emp-photo-none{display:inline-flex;align-items:center;justify-content:center;font-size:24px;color:#94a3b8;}
+.vac-pill{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:3px 10px;font-size:12px;font-weight:700;}
 @media(max-width:760px){.landing{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -409,7 +439,7 @@ tbody td.l{text-align:left;}
             <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>SL</th><th>Photo</th><th>User No.</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Action</th></tr>
+                    <tr><th>SL</th><th>Photo</th><th>User No.</th><th>Name</th><th>Location Name</th><th>Block / Tower</th><th>Room Number</th><th>Department</th><th>Vacation</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php if (!empty($emps)): $sl = 1; foreach ($emps as $e): ?>
@@ -429,6 +459,11 @@ tbody td.l{text-align:left;}
                         <td><?php echo ac_h($room['room_number']); ?></td>
                         <td><?php echo ac_h($e['department'] ?? ''); ?></td>
                         <td>
+                            <?php if ((int)($e['on_vacation'] ?? 0) === 1): ?>
+                                <span class="vac-pill">On Vacation</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Remove this employee from the room?');">
                                 <input type="hidden" name="action" value="deallocate">
                                 <input type="hidden" name="allocation_id" value="<?php echo (int)$e['allocation_id']; ?>">
@@ -438,7 +473,7 @@ tbody td.l{text-align:left;}
                         </td>
                     </tr>
                 <?php endforeach; else: ?>
-                    <tr><td colspan="9" class="muted" style="padding:18px;">No employees allocated yet.</td></tr>
+                    <tr><td colspan="10" class="muted" style="padding:18px;">No employees allocated yet.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
