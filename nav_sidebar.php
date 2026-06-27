@@ -104,6 +104,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('employee_view') || hasPermission('accommodation_manage')): ?>
         <a href="accommodation.php" class="<?php echo appnav_active('accommodation.php'); ?>">&#127968; Accommodation</a>
         <?php endif; ?>
+        <?php if (hasPermission('gate_pass_manage')): ?>
+        <a href="gate_pass.php" class="<?php echo appnav_active('gate_pass.php'); ?>">&#128682; Gate Pass</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
