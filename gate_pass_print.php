@@ -189,7 +189,7 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
         Authorized Signatory<br>
         HR Department.<br>
         For Euro Trousers MFG. CO. FZC
-        <div class="passno">Ref: <?php echo gpp_h($pass['pass_no'] ?: ('GP-' . $pass['id'])); ?></div>
+        <div class="passno">Ref: <?php echo gpp_h($pass['pass_no'] ?: ('GP-' . $pass['id'])); ?><?php if (trim((string)($pass['created_by'] ?? '')) !== ''): ?> &nbsp;|&nbsp; Prepared by: <?php echo gpp_h($pass['created_by']); ?><?php endif; ?></div>
     </div>
 
 </div>
