@@ -133,12 +133,19 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
     <div class="body-text">
         Kindly grant permission for the following employee<?php echo count($employees) > 1 ? 's' : ''; ?>
         to leave the premises on <strong><?php echo gpp_h(gpp_dmy($pass['leave_date'])); ?></strong>.
+        <?php
+            $rdate = trim((string)($pass['return_date'] ?? ''));
+            $same_day = ($rdate === '' || $rdate === '0000-00-00' || $rdate === trim((string)$pass['leave_date']));
+            $return_when = $same_day ? 'on the same day' : ('on <strong>' . gpp_h(gpp_dmy($rdate)) . '</strong>');
+        ?>
         <?php if (trim((string)$pass['depart_time']) !== '' || trim((string)$pass['return_time']) !== ''): ?>
         They will depart at <strong><?php echo gpp_h($pass['depart_time']); ?></strong>
-        and return to SAIF Zone at <strong><?php echo gpp_h($pass['return_time']); ?></strong> on the same day.
+        and return to SAIF Zone at <strong><?php echo gpp_h($pass['return_time']); ?></strong> <?php echo $return_when; ?>.
+        <?php elseif (!$same_day): ?>
+        They will return to SAIF Zone <?php echo $return_when; ?>.
         <?php endif; ?>
         <?php if (trim((string)$pass['reason']) !== ''): ?>
-        <br>Reason: <?php echo gpp_h($pass['reason']); ?>.
+        <br>Reason: <strong><?php echo gpp_h($pass['reason']); ?></strong>.
         <?php endif; ?>
     </div>
 

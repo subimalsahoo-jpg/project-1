@@ -45,6 +45,7 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_passes (
     pass_no VARCHAR(40) DEFAULT '',
     pass_date DATE NULL,
     leave_date DATE NULL,
+    return_date DATE NULL,
     depart_time VARCHAR(20) DEFAULT '',
     return_time VARCHAR(20) DEFAULT '',
     subject VARCHAR(200) DEFAULT 'Request for Permission',
@@ -58,6 +59,7 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_passes (
 
 /* Migration for tables created before the subject column existed. */
 gp_ensure_column($conn, 'gate_passes', 'subject', "VARCHAR(200) DEFAULT 'Request for Permission'");
+gp_ensure_column($conn, 'gate_passes', 'return_date', "DATE NULL");
 
 mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_pass_reasons (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -179,6 +181,7 @@ function gp_employee_snapshot($conn, $user_no, $fallback_name = '') {
 ───────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
     $leave_date  = trim($_POST['leave_date'] ?? '');
+    $return_date = trim($_POST['return_date'] ?? '');
     $depart_time = gp_time_ampm($_POST['depart_time'] ?? '');
     $return_time = gp_time_ampm($_POST['return_time'] ?? '');
     $subject     = trim($_POST['subject'] ?? '') ?: 'Request for Permission';
@@ -205,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
         $message = "<div class='gp-msg err'>Please provide a leave date and at least one employee.</div>";
     } else {
         $pass_date     = date('Y-m-d');
+        $return_date_db = ($return_date !== '') ? $return_date : null;
         $employees_json = json_encode($employees, JSON_UNESCAPED_UNICODE);
         $employee_summary = mb_substr(implode(', ', $summary_parts), 0, 500);
         $employee_count = count($employees);
@@ -212,11 +216,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
         $pass_no = '';
 
         $stmt = mysqli_prepare($conn, "INSERT INTO gate_passes
-            (pass_no, pass_date, leave_date, depart_time, return_time, subject, reason, employees_json, employee_summary, employee_count, created_by)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+            (pass_no, pass_date, leave_date, return_date, depart_time, return_time, subject, reason, employees_json, employee_summary, employee_count, created_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
         mysqli_stmt_bind_param(
-            $stmt, 'sssssssssis',
-            $pass_no, $pass_date, $leave_date, $depart_time, $return_time,
+            $stmt, 'ssssssssssis',
+            $pass_no, $pass_date, $leave_date, $return_date_db, $depart_time, $return_time,
             $subject, $reason, $employees_json, $employee_summary, $employee_count, $created_by
         );
         mysqli_stmt_execute($stmt);
@@ -394,6 +398,10 @@ table.list tr:hover td{background:#f8fafc;}
                         <input type="time" name="depart_time" value="09:00">
                     </div>
                     <div class="fg">
+                        <label>Return Date</label>
+                        <input type="date" name="return_date" value="<?php echo gp_h(date('Y-m-d')); ?>">
+                    </div>
+                    <div class="fg">
                         <label>Return Time (same day)</label>
                         <input type="time" name="return_time" value="18:00">
                     </div>
@@ -481,7 +489,12 @@ table.list tr:hover td{background:#f8fafc;}
                     <tr>
                         <td><span class="pill"><?php echo gp_h($r['pass_no'] ?: ('#' . $r['id'])); ?></span></td>
                         <td><?php echo gp_h(gp_dmy($r['pass_date'])); ?></td>
-                        <td><?php echo gp_h(gp_dmy($r['leave_date'])); ?></td>
+                        <td>
+                            <?php echo gp_h(gp_dmy($r['leave_date'])); ?>
+                            <?php if (!empty($r['return_date']) && $r['return_date'] !== '0000-00-00'): ?>
+                            <div class="muted">&#8594; <?php echo gp_h(gp_dmy($r['return_date'])); ?></div>
+                            <?php endif; ?>
+                        </td>
                         <td><?php echo gp_h($r['depart_time']); ?> &ndash; <?php echo gp_h($r['return_time']); ?></td>
                         <td>
                             <?php echo gp_h($r['employee_summary']); ?>
