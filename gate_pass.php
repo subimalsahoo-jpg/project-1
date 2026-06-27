@@ -376,24 +376,42 @@ if (isset($_GET['reason_saved'])) {
    Load history (summary)
 ───────────────────────────────────────────── */
 $f_search = trim($_GET['q'] ?? '');
-$where = '';
+$conds = [];
+/* When opened from Employee Overview, restrict the history to THAT employee
+   only. From the sidebar (no ?search), the full summary is shown. */
+if ($from_overview) {
+    $uno_esc   = mysqli_real_escape_string($conn, $prefill['user_no']);
+    $like_json = "employees_json LIKE '%\"user_no\":\"" . $uno_esc . "\"%'";
+    $like_sum1 = "employee_summary LIKE '" . $uno_esc . " - %'";
+    $like_sum2 = "employee_summary LIKE '%, " . $uno_esc . " - %'";
+    $conds[]   = "($like_json OR $like_sum1 OR $like_sum2)";
+}
 if ($f_search !== '') {
     $s = mysqli_real_escape_string($conn, $f_search);
-    $where = "WHERE pass_no LIKE '%$s%' OR employee_summary LIKE '%$s%' OR reason LIKE '%$s%' OR subject LIKE '%$s%'";
+    $conds[] = "(pass_no LIKE '%$s%' OR employee_summary LIKE '%$s%' OR reason LIKE '%$s%' OR subject LIKE '%$s%')";
 }
+$where = $conds ? ('WHERE ' . implode(' AND ', $conds)) : '';
 $rows = [];
 $lq = mysqli_query($conn, "SELECT * FROM gate_passes $where ORDER BY id DESC LIMIT 500");
 if ($lq) { while ($r = mysqli_fetch_assoc($lq)) { $rows[] = $r; } }
 
-/* Counts */
+/* Counts — scoped to this employee in overview mode, otherwise global. */
 $total_passes = 0; $this_month = 0; $today_count = 0;
 $cur_month = date('Y-m'); $today = date('Y-m-d');
-$cq = mysqli_query($conn, "SELECT pass_date FROM gate_passes");
-if ($cq) {
-    while ($c = mysqli_fetch_assoc($cq)) {
+if ($from_overview) {
+    foreach ($rows as $c) {
         $total_passes++;
         if (substr((string)$c['pass_date'], 0, 7) === $cur_month) $this_month++;
         if ((string)$c['pass_date'] === $today) $today_count++;
+    }
+} else {
+    $cq = mysqli_query($conn, "SELECT pass_date FROM gate_passes");
+    if ($cq) {
+        while ($c = mysqli_fetch_assoc($cq)) {
+            $total_passes++;
+            if (substr((string)$c['pass_date'], 0, 7) === $cur_month) $this_month++;
+            if ((string)$c['pass_date'] === $today) $today_count++;
+        }
     }
 }
 ?>
@@ -490,7 +508,7 @@ table.list tr:hover td{background:#f8fafc;}
     <?php if ($message) echo $message; ?>
 
     <div class="cards">
-        <div class="card"><div class="label">Total Gate Passes</div><div class="value"><?php echo $total_passes; ?></div></div>
+        <div class="card"><div class="label"><?php echo $from_overview ? 'This Employee — Total' : 'Total Gate Passes'; ?></div><div class="value"><?php echo $total_passes; ?></div></div>
         <div class="card"><div class="label">This Month</div><div class="value"><?php echo $this_month; ?></div></div>
         <div class="card"><div class="label">Issued Today</div><div class="value"><?php echo $today_count; ?></div></div>
     </div>
@@ -597,12 +615,18 @@ table.list tr:hover td{background:#f8fafc;}
     <!-- ── History / summary ── -->
     <div class="panel">
         <div class="panel-head">
-            <span>&#128203; Gate Pass History</span>
-            <form method="GET" class="filters">
-                <input type="text" name="q" value="<?php echo gp_h($f_search); ?>" placeholder="Search pass no / employee / reason">
-                <button class="btn btn-primary btn-sm" type="submit">&#128269; Search</button>
-                <?php if ($f_search !== ''): ?><a class="btn btn-gray btn-sm" href="gate_pass.php">Clear</a><?php endif; ?>
-            </form>
+            <span>&#128203; Gate Pass History<?php if ($from_overview): ?> &mdash; <?php echo gp_h($prefill['name'] ?: $prefill['user_no']); ?> <small style="font-weight:600;color:var(--gray-600);">(User No: <?php echo gp_h($prefill['user_no']); ?>)</small><?php endif; ?></span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <?php if ($from_overview): ?>
+                <a class="btn btn-gray btn-sm" href="gate_pass.php" title="See all employees' gate passes">&#128203; View All</a>
+                <?php endif; ?>
+                <form method="GET" class="filters">
+                    <?php if ($from_overview): ?><input type="hidden" name="search" value="<?php echo gp_h($searchVal); ?>"><?php endif; ?>
+                    <input type="text" name="q" value="<?php echo gp_h($f_search); ?>" placeholder="Search pass no / employee / reason">
+                    <button class="btn btn-primary btn-sm" type="submit">&#128269; Search</button>
+                    <?php if ($f_search !== ''): ?><a class="btn btn-gray btn-sm" href="gate_pass.php<?php echo $from_overview ? ('?search=' . urlencode($searchVal)) : ''; ?>">Clear</a><?php endif; ?>
+                </form>
+            </div>
         </div>
         <div class="panel-body" style="overflow-x:auto;">
             <table class="list">
