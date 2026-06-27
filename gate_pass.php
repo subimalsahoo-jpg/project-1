@@ -310,12 +310,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
         mysqli_stmt_close($stmt);
 
         if ($new_id > 0) {
-            /* Monthly serial: GP-YYYY-MM-NNN where NNN restarts each month. */
-            $ym = date('Y-m');
-            $cnt_row = mysqli_fetch_assoc(mysqli_query($conn,
-                "SELECT COUNT(*) AS c FROM gate_passes WHERE DATE_FORMAT(pass_date,'%Y-%m') = '" . mysqli_real_escape_string($conn, $ym) . "'"));
-            $serial = max(1, (int)($cnt_row['c'] ?? 1));
-            $pass_no = 'GP-' . date('Y') . '-' . date('m') . '-' . str_pad((string)$serial, 3, '0', STR_PAD_LEFT);
+            /* Monthly serial: GP-YYYY-MM-NNN. Derive the next number from the
+               HIGHEST existing serial for this month + 1 (robust against
+               deletions and never produces duplicates). */
+            $prefix = 'GP-' . date('Y') . '-' . date('m') . '-';
+            $safe_like = mysqli_real_escape_string($conn, $prefix) . '%';
+            $max_serial = 0;
+            $maxq = mysqli_query($conn, "SELECT pass_no FROM gate_passes WHERE pass_no LIKE '$safe_like'");
+            if ($maxq) {
+                while ($mr = mysqli_fetch_assoc($maxq)) {
+                    $suffix = (int)substr((string)$mr['pass_no'], strlen($prefix));
+                    if ($suffix > $max_serial) $max_serial = $suffix;
+                }
+            }
+            $serial  = $max_serial + 1;
+            $pass_no = $prefix . str_pad((string)$serial, 3, '0', STR_PAD_LEFT);
             $up = mysqli_prepare($conn, "UPDATE gate_passes SET pass_no=? WHERE id=?");
             mysqli_stmt_bind_param($up, 'si', $pass_no, $new_id);
             mysqli_stmt_execute($up);
