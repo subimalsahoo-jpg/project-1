@@ -5,6 +5,29 @@ requireAnyPermission(['gate_pass_manage']);
 $is_admin = function_exists('is_admin_user') ? is_admin_user() : false;
 
 /* ─────────────────────────────────────────────
+   AJAX: look up an employee's name by User No / Employee ID
+   (used to auto-fill the name box as you type the User No)
+───────────────────────────────────────────── */
+if (isset($_GET['lookup'])) {
+    header('Content-Type: application/json');
+    $key = trim((string)$_GET['lookup']);
+    $out = ['found' => false, 'name' => '', 'user_no' => ''];
+    if ($key !== '') {
+        $stmt = mysqli_prepare($conn, "SELECT user_no, full_name FROM employees
+            WHERE user_no = ? OR employee_id = ? LIMIT 1");
+        mysqli_stmt_bind_param($stmt, 'ss', $key, $key);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        if ($e = mysqli_fetch_assoc($res)) {
+            $out = ['found' => true, 'name' => (string)$e['full_name'], 'user_no' => (string)$e['user_no']];
+        }
+        mysqli_stmt_close($stmt);
+    }
+    echo json_encode($out);
+    exit();
+}
+
+/* ─────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────── */
 function gp_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -261,6 +284,10 @@ if ($searchVal !== '') {
     mysqli_stmt_close($stmt);
 }
 
+/* When opened from Employee Overview (?search=user_no) the pass is for that
+   one employee: prefill name + user no and hide the multi-employee controls. */
+$from_overview = ($searchVal !== '' && $prefill['user_no'] !== '');
+
 $saved_id = (int)($_GET['saved'] ?? 0);
 if ($saved_id > 0) {
     $message = "<div class='gp-msg ok'>&#10004; Gate pass generated and saved. The printable copy is opening in a new tab&hellip;</div>";
@@ -327,13 +354,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
 .fg{display:flex;flex-direction:column;gap:5px;}
 .fg.full{grid-column:1/-1;}
-.fg label{font-size:12.5px;font-weight:600;color:var(--gray-600);}
-.fg input,.fg select{padding:9px 11px;border:1px solid var(--gray-200);border-radius:7px;font-size:14px;font-family:inherit;background:#f8fafc;}
-.fg input:focus,.fg select:focus{outline:none;border-color:var(--brand-mid);background:#fff;}
+.fg label{font-size:13px;font-weight:700;color:var(--brand);}
+.fg input,.fg select{padding:10px 12px;border:1.6px solid #f1c27a;border-radius:8px;font-size:14px;font-family:inherit;background:#fffaf2;transition:border-color .15s,box-shadow .15s;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(232,160,32,.22);}
 .emp-table{width:100%;border-collapse:collapse;margin-top:6px;}
 .emp-table th{background:var(--brand);color:#fff;font-size:12px;text-align:left;padding:8px 10px;}
 .emp-table td{padding:6px 8px;border-bottom:1px solid var(--gray-200);}
-.emp-table input{width:100%;padding:8px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13.5px;background:#f8fafc;}
+.emp-table input{width:100%;padding:9px 11px;border:1.6px solid #f1c27a;border-radius:7px;font-size:13.5px;background:#fffaf2;transition:border-color .15s,box-shadow .15s;}
+.emp-table input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(232,160,32,.22);}
 .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:7px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none;}
 .btn-accent{background:var(--accent);color:#1a1a1a;}
 .btn-accent:hover{background:#d4901a;}
@@ -422,20 +450,28 @@ table.list tr:hover td{background:#f8fafc;}
 
                 <table class="emp-table" id="empTable">
                     <thead>
-                        <tr><th style="width:180px;">User No</th><th>Employee Name</th><th style="width:70px;">&nbsp;</th></tr>
+                        <tr>
+                            <th style="width:180px;">User No</th>
+                            <th>Employee Name</th>
+                            <?php if (!$from_overview): ?><th style="width:70px;">&nbsp;</th><?php endif; ?>
+                        </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><input type="text" name="user_no[]" value="<?php echo gp_h($prefill['user_no']); ?>" placeholder="User No"></td>
-                            <td><input type="text" name="emp_name[]" value="<?php echo gp_h($prefill['name']); ?>" placeholder="Employee name"></td>
+                            <td><input type="text" name="user_no[]" value="<?php echo gp_h($prefill['user_no']); ?>" placeholder="User No" onchange="gpLookup(this)" onblur="gpLookup(this)" <?php echo $from_overview ? 'readonly' : ''; ?>></td>
+                            <td><input type="text" name="emp_name[]" value="<?php echo gp_h($prefill['name']); ?>" placeholder="Employee name" <?php echo $from_overview ? 'readonly' : ''; ?>></td>
+                            <?php if (!$from_overview): ?>
                             <td><button type="button" class="btn btn-sm btn-rowdel" onclick="gpDelRow(this)">&#10005;</button></td>
+                            <?php endif; ?>
                         </tr>
                     </tbody>
                 </table>
-                <div class="muted" style="margin-top:6px;">Saif Zone ID, Emirates ID and the photo are pulled automatically from the employee record (matched by User No).</div>
+                <div class="muted" style="margin-top:6px;">Type a User No (or Employee ID) and the name fills in automatically. Saif Zone ID, Emirates ID and the photo are pulled from the employee record.</div>
 
                 <div class="actions">
+                    <?php if (!$from_overview): ?>
                     <button type="button" class="btn btn-gray" onclick="gpAddRow()">&#10133; Add Employee</button>
+                    <?php endif; ?>
                     <button type="submit" class="btn btn-accent">&#128682; Generate &amp; Save Gate Pass</button>
                 </div>
             </form>
@@ -524,7 +560,7 @@ function gpAddRow() {
     var tb = document.querySelector('#empTable tbody');
     var tr = document.createElement('tr');
     tr.innerHTML =
-        '<td><input type="text" name="user_no[]" placeholder="User No"></td>' +
+        '<td><input type="text" name="user_no[]" placeholder="User No" onchange="gpLookup(this)" onblur="gpLookup(this)"></td>' +
         '<td><input type="text" name="emp_name[]" placeholder="Employee name"></td>' +
         '<td><button type="button" class="btn btn-sm btn-rowdel" onclick="gpDelRow(this)">&#10005;</button></td>';
     tb.appendChild(tr);
@@ -536,6 +572,23 @@ function gpDelRow(btn) {
         return;
     }
     btn.closest('tr').remove();
+}
+/* Auto-fill the employee name from the typed User No / Employee ID. */
+function gpLookup(input) {
+    var val = (input.value || '').trim();
+    var row = input.closest('tr');
+    if (!row) return;
+    var nameInput = row.querySelector('input[name="emp_name[]"]');
+    if (!nameInput || val === '') return;
+    fetch('gate_pass.php?lookup=' + encodeURIComponent(val))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d && d.found) {
+                nameInput.value = d.name;
+                if (d.user_no) { input.value = d.user_no; }
+            }
+        })
+        .catch(function(){});
 }
 <?php if ($saved_id > 0): ?>
 window.open('gate_pass_print.php?id=<?php echo $saved_id; ?>&auto=1', '_blank');
