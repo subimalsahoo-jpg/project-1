@@ -331,7 +331,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
             mysqli_stmt_close($up);
         }
 
-        header("Location: gate_pass.php?saved=" . (int)$new_id);
+        if (($_POST['origin'] ?? '') === 'overview') {
+            $os = urlencode(trim((string)($_POST['origin_search'] ?? '')));
+            header("Location: employee_overview.php?search=$os&tab=gatepass&gp_print=" . (int)$new_id);
+        } else {
+            header("Location: gate_pass.php?saved=" . (int)$new_id);
+        }
         exit();
     }
 }

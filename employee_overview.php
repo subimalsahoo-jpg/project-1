@@ -249,11 +249,16 @@ if ($canEditEmployee && isset($_POST['delete_visarenewal'])) {
     if ($vid > 0) { mysqli_query($conn, "DELETE FROM employee_visa_renewals WHERE id=$vid"); }
     $message = "<div class='msg success'><span>✓</span> Visa renewal removed.</div>";
 }
+/* Document types (alphabetical, with "Other" last) — shared by the upload
+   handler and the dropdown in the Documents tab. */
+$document_type_options = ['Contract Paper','Emirates ID','Entry Permit','Insurance','Medical Certificate','Old Emirates ID','Old Visa','Passport','Photo','Saif Zone ID','Status Change Paper','Visa','Visit Visa'];
+sort($document_type_options);
+$document_type_options[] = 'Other';
+
 if ($canEditEmployee && isset($_POST['save_document'])) {
     $u  = mysqli_real_escape_string($conn, trim($_POST['user_no'] ?? ''));
     $ei = mysqli_real_escape_string($conn, trim($_POST['employee_id'] ?? ''));
-    $allowed_doc_types = ['Visa', 'Emirates ID', 'Passport', 'Other'];
-    $dt_raw = in_array($_POST['doc_type'] ?? 'Other', $allowed_doc_types, true) ? $_POST['doc_type'] : 'Other';
+    $dt_raw = in_array(($_POST['doc_type'] ?? 'Other'), $document_type_options, true) ? $_POST['doc_type'] : 'Other';
     $dt = mysqli_real_escape_string($conn, $dt_raw);
     $dn = mysqli_real_escape_string($conn, trim($_POST['doc_number'] ?? ''));
     $rk = mysqli_real_escape_string($conn, trim($_POST['doc_remarks'] ?? ''));
@@ -272,7 +277,9 @@ if ($canEditEmployee && isset($_POST['save_document'])) {
         } else {
             if (!is_dir("uploads/documents")) { mkdir("uploads/documents", 0755, true); }
             $orig = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES['doc_file']['name']));
-            $stored = 'doc_' . trim($_POST['user_no'] ?? '') . '_' . time() . '_' . mt_rand(100, 999) . '.' . $ext;
+            $dt_slug = trim(preg_replace('/[^A-Za-z0-9]+/', '-', $dt_raw), '-');
+            if ($dt_slug === '') { $dt_slug = 'Document'; }
+            $stored = $dt_slug . '_' . trim($_POST['user_no'] ?? '') . '_' . time() . '_' . mt_rand(100, 999) . '.' . $ext;
             $stored = preg_replace('/[^a-zA-Z0-9._-]/', '_', $stored);
             if (move_uploaded_file($_FILES['doc_file']['tmp_name'], "uploads/documents/" . $stored)) {
                 $sf = mysqli_real_escape_string($conn, $stored);
@@ -1001,9 +1008,10 @@ textarea { height: 48px; resize: vertical; }
         </a>
         <?php endforeach; ?>
         <?php if (hasPermission('gate_pass_manage')): ?>
-        <a href="gate_pass.php?search=<?= urlencode((string)$employee['user_no']) ?>"
-           class="tab-pill" style="background:#0f766e;color:#fff;border-color:#0f766e;"
-           title="Generate a SAIF Zone gate pass for this employee">
+        <a href="employee_overview.php?search=<?= $searchVal ?>&tab=gatepass"
+           class="tab-pill <?= $currentTab === 'gatepass' ? 'active' : '' ?>"
+           style="<?= $currentTab === 'gatepass' ? 'background:#0f766e;color:#fff;border-color:#0f766e;' : 'color:#0f766e;border-color:#0f766e;' ?>"
+           title="View / generate this employee's SAIF Zone gate passes">
             🚪 Gate Pass
         </a>
         <?php endif; ?>
@@ -2252,10 +2260,9 @@ elseif ($employee && $currentTab === 'documents'):
             <input type="hidden" name="employee_id" value="<?= val($employee,'employee_id') ?>">
             <div><label style="font-size:12px;display:block;">Document Type</label>
                 <select name="doc_type">
-                    <option value="Visa">Visa</option>
-                    <option value="Emirates ID">Emirates ID</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Other">Other</option>
+                    <?php foreach ($document_type_options as $dt_opt): ?>
+                    <option value="<?= htmlspecialchars($dt_opt, ENT_QUOTES) ?>"><?= htmlspecialchars($dt_opt, ENT_QUOTES) ?></option>
+                    <?php endforeach; ?>
                 </select></div>
             <div><label style="font-size:12px;display:block;">Document No (optional)</label><input type="text" name="doc_number" placeholder="e.g. 784-xxxx"></div>
             <div><label style="font-size:12px;display:block;">File (PDF / JPG / PNG)</label><input type="file" name="doc_file" accept=".pdf,.jpg,.jpeg,.png" required></div>
@@ -2271,6 +2278,13 @@ elseif ($employee && $currentTab === 'documents'):
                 $ext = strtolower($r['file_ext']);
                 $url = 'uploads/documents/' . rawurlencode($r['file_name']);
                 $is_img = in_array($ext, ['jpg','jpeg','png'], true);
+                /* Download filename based on the document type (+ number) so the
+                   file downloads as e.g. "Medical Certificate.pdf". */
+                $dl_name = (string)$r['doc_type'];
+                if (trim((string)$r['doc_number']) !== '') { $dl_name .= ' ' . $r['doc_number']; }
+                $dl_name = trim(preg_replace('/[^A-Za-z0-9 _.\-]/', '', $dl_name));
+                if ($dl_name === '') { $dl_name = 'document'; }
+                $dl_name .= '.' . $ext;
             ?>
             <div style="width:230px;border:1px solid var(--border,#e2e8f0);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.06);">
                 <div style="background:#1a3a5c;color:#fff;padding:7px 10px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">
@@ -2292,7 +2306,10 @@ elseif ($employee && $currentTab === 'documents'):
                     <?php if ($r['remarks'] !== ''): ?><div style="font-size:12px;color:#475569;"><?= htmlspecialchars($r['remarks'], ENT_QUOTES) ?></div><?php endif; ?>
                     <div style="font-size:11px;color:#94a3b8;margin:4px 0 8px;"><?= $r['created_at'] ? date('d-M-Y', strtotime($r['created_at'])) : '' ?></div>
                     <div style="display:flex;gap:6px;">
-                        <a href="<?= $url ?>" <?= $is_img ? 'target="_blank"' : 'download' ?> class="btn" style="padding:5px 10px;font-size:12px;flex:1;text-align:center;"><?= $is_img ? '🔍 View' : '⬇️ Download' ?></a>
+                        <?php if ($is_img): ?>
+                        <a href="<?= $url ?>" target="_blank" class="btn" style="padding:5px 10px;font-size:12px;flex:1;text-align:center;">🔍 View</a>
+                        <?php endif; ?>
+                        <a href="<?= $url ?>" download="<?= htmlspecialchars($dl_name, ENT_QUOTES) ?>" class="btn" style="padding:5px 10px;font-size:12px;flex:1;text-align:center;">⬇️ Download</a>
                         <?php if ($canEditEmployee): ?>
                         <form method="POST" onsubmit="return confirm('Delete this document?');" style="margin:0;">
                             <button type="submit" name="delete_document" value="<?= (int)$r['id'] ?>" class="btn" style="background:#fdecea;color:#c0392b;padding:5px 10px;font-size:12px;">Delete</button>
@@ -2308,6 +2325,12 @@ elseif ($employee && $currentTab === 'documents'):
         <?php endif; ?>
     </div>
 </div>
+
+<?php
+/* ══ TAB: GATE PASS ═══════════════════════════════════════════════════════ */
+elseif ($employee && $currentTab === 'gatepass' && hasPermission('gate_pass_manage')):
+    include 'gate_pass_panel.php';
+?>
 
 <?php else: ?>
 
