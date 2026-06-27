@@ -783,9 +783,11 @@ table{width:100%;}
         <td class="action-col">
             <a class="btn edit" href="add_employee.php?search_user_no=<?php echo urlencode($edit_user_no); ?>">Edit</a>
             <a class="btn salary" href="employee_salary.php?user_no=<?php echo urlencode($edit_user_no); ?>">Salary</a>
+            <?php if (is_admin_user()): ?>
             <a class="btn delete"
                href="delete_employee.php?id=<?php echo urlencode($row['id'] ?? ''); ?>"
-               onclick="return confirm('Delete this employee?')">Delete</a>
+               onclick="return confirm('Are you sure you want to permanently delete this employee?\n\nThis action cannot be undone.');">Delete</a>
+            <?php endif; ?>
         </td>
     </tr>
     <?php } ?>

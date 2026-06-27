@@ -792,7 +792,9 @@ if (empty($attendance_rows)):
         <td class="action-cell <?php echo $row_class; ?>">
             <?php if ($can_edit_attendance): ?>
                 <a class="action-btn action-edit" href="edit_attendance.php?id=<?php echo (int)($row['id'] ?? 0); ?>&return=<?php echo urlencode($current_report_url); ?>">Edit</a>
-                <a class="action-btn action-delete" href="delete_attendance.php?id=<?php echo (int)($row['id'] ?? 0); ?>" onclick="return confirm('Delete this attendance record?');">Delete</a>
+            <?php endif; ?>
+            <?php if (is_admin_user()): ?>
+                <a class="action-btn action-delete" href="delete_attendance.php?id=<?php echo (int)($row['id'] ?? 0); ?>&return=<?php echo urlencode($current_report_url); ?>" onclick="return confirm('Are you sure you want to delete this attendance record?\n\nThis action cannot be undone.');">Delete</a>
             <?php endif; ?>
         </td>
     </tr>
