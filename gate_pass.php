@@ -2,6 +2,8 @@
 include 'auth.php';
 requireAnyPermission(['gate_pass_manage']);
 
+$is_admin = function_exists('is_admin_user') ? is_admin_user() : false;
+
 /* ─────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────── */
@@ -25,8 +27,18 @@ function gp_time_ampm($v) {
     return $t ? date('g:i A', $t) : $v;
 }
 
+/* Ensure a column exists on a table (simple migration helper). */
+function gp_ensure_column($conn, $table, $column, $definition) {
+    $safe_t = mysqli_real_escape_string($conn, $table);
+    $safe_c = mysqli_real_escape_string($conn, $column);
+    $r = mysqli_query($conn, "SHOW COLUMNS FROM `$safe_t` LIKE '$safe_c'");
+    if ($r && mysqli_num_rows($r) === 0) {
+        mysqli_query($conn, "ALTER TABLE `$safe_t` ADD `$column` $definition");
+    }
+}
+
 /* ─────────────────────────────────────────────
-   Ensure the gate_passes table exists
+   Ensure tables exist
 ───────────────────────────────────────────── */
 mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_passes (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -35,6 +47,7 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_passes (
     leave_date DATE NULL,
     depart_time VARCHAR(20) DEFAULT '',
     return_time VARCHAR(20) DEFAULT '',
+    subject VARCHAR(200) DEFAULT 'Request for Permission',
     reason VARCHAR(255) DEFAULT '',
     employees_json TEXT,
     employee_summary VARCHAR(500) DEFAULT '',
@@ -43,13 +56,82 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_passes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+/* Migration for tables created before the subject column existed. */
+gp_ensure_column($conn, 'gate_passes', 'subject', "VARCHAR(200) DEFAULT 'Request for Permission'");
+
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS gate_pass_reasons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    reason_text VARCHAR(120) NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+/* Seed default reasons once. */
+$seed_chk = mysqli_query($conn, "SELECT COUNT(*) AS c FROM gate_pass_reasons");
+if ($seed_chk && (int)(mysqli_fetch_assoc($seed_chk)['c'] ?? 0) === 0) {
+    $defaults = ['Leave', 'Visa Renewal', 'Personal Work', 'Medical Purpose', 'Passport Renewal', 'Holiday', 'Vacation', 'Country Exit'];
+    $i = 0;
+    foreach ($defaults as $d) {
+        $sd = mysqli_real_escape_string($conn, $d);
+        mysqli_query($conn, "INSERT INTO gate_pass_reasons (reason_text, sort_order) VALUES ('$sd', $i)");
+        $i++;
+    }
+}
+
 $message = '';
+
+/* ─────────────────────────────────────────────
+   Reason management — Admin only (add / edit / delete)
+───────────────────────────────────────────── */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin && isset($_POST['add_reason'])) {
+    $rt = trim($_POST['reason_text'] ?? '');
+    if ($rt !== '') {
+        $dup = mysqli_query($conn, "SELECT id FROM gate_pass_reasons WHERE reason_text='" . mysqli_real_escape_string($conn, $rt) . "' LIMIT 1");
+        if (!$dup || mysqli_num_rows($dup) === 0) {
+            $ord_r = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM gate_pass_reasons"));
+            $ord = (int)($ord_r['n'] ?? 0);
+            $stmt = mysqli_prepare($conn, "INSERT INTO gate_pass_reasons (reason_text, sort_order) VALUES (?, ?)");
+            mysqli_stmt_bind_param($stmt, 'si', $rt, $ord);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+    }
+    header("Location: gate_pass.php?reason_saved=1");
+    exit();
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin && isset($_POST['edit_reason'])) {
+    $rid = (int)($_POST['reason_id'] ?? 0);
+    $rt  = trim($_POST['reason_text'] ?? '');
+    if ($rid > 0 && $rt !== '') {
+        $stmt = mysqli_prepare($conn, "UPDATE gate_pass_reasons SET reason_text=? WHERE id=?");
+        mysqli_stmt_bind_param($stmt, 'si', $rt, $rid);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+    header("Location: gate_pass.php?reason_saved=1");
+    exit();
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin && isset($_POST['delete_reason'])) {
+    $rid = (int)($_POST['delete_reason'] ?? 0);
+    if ($rid > 0) {
+        $stmt = mysqli_prepare($conn, "DELETE FROM gate_pass_reasons WHERE id=?");
+        mysqli_stmt_bind_param($stmt, 'i', $rid);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+    header("Location: gate_pass.php?reason_saved=1");
+    exit();
+}
+
+/* Load reasons for the dropdown */
+$reasons = [];
+$rq = mysqli_query($conn, "SELECT * FROM gate_pass_reasons ORDER BY sort_order, reason_text");
+if ($rq) { while ($r = mysqli_fetch_assoc($rq)) { $reasons[] = $r; } }
 
 /* ─────────────────────────────────────────────
    Delete a gate pass — Admin only
 ───────────────────────────────────────────── */
-$can_delete = function_exists('is_admin_user') ? is_admin_user() : false;
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_pass']) && $can_delete) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_pass']) && $is_admin) {
     $gid = (int)($_POST['delete_pass'] ?? 0);
     if ($gid > 0) {
         $stmt = mysqli_prepare($conn, "DELETE FROM gate_passes WHERE id=?");
@@ -62,15 +144,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_pass']) && $ca
 }
 
 /* ─────────────────────────────────────────────
+   Look up an employee snapshot (for the printed pass)
+───────────────────────────────────────────── */
+function gp_employee_snapshot($conn, $user_no, $fallback_name = '') {
+    $snap = [
+        'user_no'      => $user_no,
+        'emp_id'       => '',
+        'name'         => $fallback_name,
+        'saif_zone_id' => '',
+        'emirates_id'  => '',
+        'photo'        => '',
+    ];
+    $user_no = trim((string)$user_no);
+    if ($user_no === '') return $snap;
+
+    $stmt = mysqli_prepare($conn, "SELECT user_no, employee_id, full_name, saif_zone_id, emirates_id_number, photo
+        FROM employees WHERE user_no = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 's', $user_no);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    if ($e = mysqli_fetch_assoc($res)) {
+        $snap['emp_id']       = trim((string)($e['employee_id'] ?: $e['user_no']));
+        $snap['name']         = trim((string)$e['full_name']) ?: $fallback_name;
+        $snap['saif_zone_id'] = trim((string)($e['saif_zone_id'] ?? ''));
+        $snap['emirates_id']  = trim((string)($e['emirates_id_number'] ?? ''));
+        $snap['photo']        = trim((string)($e['photo'] ?? ''));
+    }
+    mysqli_stmt_close($stmt);
+    return $snap;
+}
+
+/* ─────────────────────────────────────────────
    Save a new gate pass
 ───────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
     $leave_date  = trim($_POST['leave_date'] ?? '');
     $depart_time = gp_time_ampm($_POST['depart_time'] ?? '');
     $return_time = gp_time_ampm($_POST['return_time'] ?? '');
+    $subject     = trim($_POST['subject'] ?? '') ?: 'Request for Permission';
     $reason      = trim($_POST['reason'] ?? '');
 
-    $emp_ids   = $_POST['emp_id']   ?? [];
     $emp_names = $_POST['emp_name'] ?? [];
     $user_nos  = $_POST['user_no']  ?? [];
 
@@ -78,12 +191,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
     $summary_parts = [];
     if (is_array($emp_names)) {
         foreach ($emp_names as $i => $nm) {
-            $nm = trim((string)$nm);
-            if ($nm === '') continue;
-            $eid = trim((string)($emp_ids[$i] ?? ''));
+            $nm  = trim((string)$nm);
             $uno = trim((string)($user_nos[$i] ?? ''));
-            $employees[] = ['emp_id' => $eid, 'name' => $nm, 'user_no' => $uno];
-            $summary_parts[] = ($eid !== '' ? $eid . ' - ' : '') . $nm;
+            if ($nm === '' && $uno === '') continue;
+            $snap = gp_employee_snapshot($conn, $uno, $nm);
+            if (trim((string)$snap['name']) === '') continue;
+            $employees[] = $snap;
+            $summary_parts[] = ($snap['user_no'] !== '' ? $snap['user_no'] . ' - ' : '') . $snap['name'];
         }
     }
 
@@ -98,18 +212,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
         $pass_no = '';
 
         $stmt = mysqli_prepare($conn, "INSERT INTO gate_passes
-            (pass_no, pass_date, leave_date, depart_time, return_time, reason, employees_json, employee_summary, employee_count, created_by)
-            VALUES (?,?,?,?,?,?,?,?,?,?)");
+            (pass_no, pass_date, leave_date, depart_time, return_time, subject, reason, employees_json, employee_summary, employee_count, created_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)");
         mysqli_stmt_bind_param(
-            $stmt, 'ssssssssis',
+            $stmt, 'sssssssssis',
             $pass_no, $pass_date, $leave_date, $depart_time, $return_time,
-            $reason, $employees_json, $employee_summary, $employee_count, $created_by
+            $subject, $reason, $employees_json, $employee_summary, $employee_count, $created_by
         );
         mysqli_stmt_execute($stmt);
         $new_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
-        /* Build a readable pass number from the new auto id. */
         if ($new_id > 0) {
             $pass_no = 'GP-' . date('Y') . '-' . str_pad((string)$new_id, 4, '0', STR_PAD_LEFT);
             $up = mysqli_prepare($conn, "UPDATE gate_passes SET pass_no=? WHERE id=?");
@@ -126,10 +239,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
 /* ─────────────────────────────────────────────
    Prefill from employee overview (?search=user_no)
 ───────────────────────────────────────────── */
-$prefill = ['emp_id' => '', 'name' => '', 'user_no' => ''];
+$prefill = ['name' => '', 'user_no' => ''];
 $searchVal = trim($_GET['search'] ?? '');
 if ($searchVal !== '') {
-    $stmt = mysqli_prepare($conn, "SELECT user_no, employee_id, full_name FROM employees
+    $stmt = mysqli_prepare($conn, "SELECT user_no, full_name FROM employees
         WHERE user_no = ? OR employee_id = ? OR full_name LIKE ? LIMIT 1");
     $like = '%' . $searchVal . '%';
     mysqli_stmt_bind_param($stmt, 'sss', $searchVal, $searchVal, $like);
@@ -137,7 +250,6 @@ if ($searchVal !== '') {
     $res = mysqli_stmt_get_result($stmt);
     if ($emp = mysqli_fetch_assoc($res)) {
         $prefill = [
-            'emp_id'  => trim((string)($emp['employee_id'] ?: $emp['user_no'])),
             'name'    => trim((string)$emp['full_name']),
             'user_no' => trim((string)$emp['user_no']),
         ];
@@ -152,6 +264,9 @@ if ($saved_id > 0) {
 if (isset($_GET['deleted'])) {
     $message = "<div class='gp-msg ok'>Gate pass deleted.</div>";
 }
+if (isset($_GET['reason_saved'])) {
+    $message = "<div class='gp-msg ok'>Reason list updated.</div>";
+}
 
 /* ─────────────────────────────────────────────
    Load history (summary)
@@ -160,16 +275,16 @@ $f_search = trim($_GET['q'] ?? '');
 $where = '';
 if ($f_search !== '') {
     $s = mysqli_real_escape_string($conn, $f_search);
-    $where = "WHERE pass_no LIKE '%$s%' OR employee_summary LIKE '%$s%' OR reason LIKE '%$s%'";
+    $where = "WHERE pass_no LIKE '%$s%' OR employee_summary LIKE '%$s%' OR reason LIKE '%$s%' OR subject LIKE '%$s%'";
 }
 $rows = [];
-$rq = mysqli_query($conn, "SELECT * FROM gate_passes $where ORDER BY id DESC LIMIT 500");
-if ($rq) { while ($r = mysqli_fetch_assoc($rq)) { $rows[] = $r; } }
+$lq = mysqli_query($conn, "SELECT * FROM gate_passes $where ORDER BY id DESC LIMIT 500");
+if ($lq) { while ($r = mysqli_fetch_assoc($lq)) { $rows[] = $r; } }
 
 /* Counts */
 $total_passes = 0; $this_month = 0; $today_count = 0;
 $cur_month = date('Y-m'); $today = date('Y-m-d');
-$cq = mysqli_query($conn, "SELECT pass_date, employee_count FROM gate_passes");
+$cq = mysqli_query($conn, "SELECT pass_date FROM gate_passes");
 if ($cq) {
     while ($c = mysqli_fetch_assoc($cq)) {
         $total_passes++;
@@ -210,7 +325,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .fg.full{grid-column:1/-1;}
 .fg label{font-size:12.5px;font-weight:600;color:var(--gray-600);}
 .fg input,.fg select{padding:9px 11px;border:1px solid var(--gray-200);border-radius:7px;font-size:14px;font-family:inherit;background:#f8fafc;}
-.fg input:focus{outline:none;border-color:var(--brand-mid);background:#fff;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--brand-mid);background:#fff;}
 .emp-table{width:100%;border-collapse:collapse;margin-top:6px;}
 .emp-table th{background:var(--brand);color:#fff;font-size:12px;text-align:left;padding:8px 10px;}
 .emp-table td{padding:6px 8px;border-bottom:1px solid var(--gray-200);}
@@ -234,6 +349,10 @@ table.list tr:hover td{background:#f8fafc;}
 .pill{display:inline-block;background:#e0ecff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-weight:700;font-size:11.5px;}
 .filters{display:flex;gap:8px;}
 .filters input{padding:8px 11px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;}
+.reason-row{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--gray-200);}
+.reason-row input[type=text]{flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13.5px;background:#f8fafc;}
+.reason-add{display:flex;gap:8px;margin-bottom:12px;}
+.reason-add input{flex:1;padding:9px 11px;border:1px solid var(--gray-200);border-radius:7px;font-size:14px;}
 @media(max-width:900px){.cards{grid-template-columns:1fr;}.form-grid{grid-template-columns:1fr 1fr;}}
 @media print{.topbar,.appnav,.appnav-toggle,.appnav-backdrop{display:none!important;}}
 </style>
@@ -279,24 +398,33 @@ table.list tr:hover td{background:#f8fafc;}
                         <input type="time" name="return_time" value="18:00">
                     </div>
                     <div class="fg">
-                        <label>Reason (optional)</label>
-                        <input type="text" name="reason" placeholder="e.g. Personal work">
+                        <label>Reason</label>
+                        <select name="reason">
+                            <option value="">&mdash; Select reason &mdash;</option>
+                            <?php foreach ($reasons as $rr): ?>
+                            <option value="<?php echo gp_h($rr['reason_text']); ?>"><?php echo gp_h($rr['reason_text']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg full">
+                        <label>Subject</label>
+                        <input type="text" name="subject" value="Request for Permission" placeholder="Subject line of the letter">
                     </div>
                 </div>
 
                 <table class="emp-table" id="empTable">
                     <thead>
-                        <tr><th style="width:160px;">EMP ID</th><th>EMPLOYEE NAME</th><th style="width:150px;">User No</th><th style="width:70px;">&nbsp;</th></tr>
+                        <tr><th style="width:180px;">User No</th><th>Employee Name</th><th style="width:70px;">&nbsp;</th></tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><input type="text" name="emp_id[]" value="<?php echo gp_h($prefill['emp_id']); ?>" placeholder="EMP ID"></td>
-                            <td><input type="text" name="emp_name[]" value="<?php echo gp_h($prefill['name']); ?>" placeholder="Employee name"></td>
                             <td><input type="text" name="user_no[]" value="<?php echo gp_h($prefill['user_no']); ?>" placeholder="User No"></td>
+                            <td><input type="text" name="emp_name[]" value="<?php echo gp_h($prefill['name']); ?>" placeholder="Employee name"></td>
                             <td><button type="button" class="btn btn-sm btn-rowdel" onclick="gpDelRow(this)">&#10005;</button></td>
                         </tr>
                     </tbody>
                 </table>
+                <div class="muted" style="margin-top:6px;">Saif Zone ID, Emirates ID and the photo are pulled automatically from the employee record (matched by User No).</div>
 
                 <div class="actions">
                     <button type="button" class="btn btn-gray" onclick="gpAddRow()">&#10133; Add Employee</button>
@@ -305,6 +433,28 @@ table.list tr:hover td{background:#f8fafc;}
             </form>
         </div>
     </div>
+
+    <?php if ($is_admin): ?>
+    <!-- ── Manage reasons (Admin only) ── -->
+    <div class="panel">
+        <div class="panel-head"><span>&#9881; Manage Reasons (Admin)</span></div>
+        <div class="panel-body">
+            <form method="POST" class="reason-add">
+                <input type="text" name="reason_text" placeholder="Add a new reason (e.g. Bank Work)" required>
+                <button type="submit" name="add_reason" value="1" class="btn btn-primary">&#10133; Add</button>
+            </form>
+            <?php foreach ($reasons as $rr): ?>
+            <form method="POST" class="reason-row">
+                <input type="hidden" name="reason_id" value="<?php echo (int)$rr['id']; ?>">
+                <input type="text" name="reason_text" value="<?php echo gp_h($rr['reason_text']); ?>">
+                <button type="submit" name="edit_reason" value="1" class="btn btn-sm btn-gray">Save</button>
+                <button type="submit" name="delete_reason" value="<?php echo (int)$rr['id']; ?>" class="btn btn-sm btn-rowdel" onclick="return confirm('Delete this reason?');">Delete</button>
+            </form>
+            <?php endforeach; ?>
+            <?php if (empty($reasons)): ?><div class="muted">No reasons yet. Add one above.</div><?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- ── History / summary ── -->
     <div class="panel">
@@ -341,7 +491,7 @@ table.list tr:hover td{background:#f8fafc;}
                         <td><?php echo gp_h($r['created_by']); ?></td>
                         <td style="text-align:right;white-space:nowrap;">
                             <a class="btn btn-sm btn-print" href="gate_pass_print.php?id=<?php echo (int)$r['id']; ?>&auto=1" target="_blank" rel="noopener">&#128438; Print</a>
-                            <?php if ($can_delete): ?>
+                            <?php if ($is_admin): ?>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this gate pass?');">
                                 <input type="hidden" name="delete_pass" value="<?php echo (int)$r['id']; ?>">
                                 <button type="submit" class="btn btn-sm btn-rowdel">Delete</button>
@@ -361,23 +511,20 @@ function gpAddRow() {
     var tb = document.querySelector('#empTable tbody');
     var tr = document.createElement('tr');
     tr.innerHTML =
-        '<td><input type="text" name="emp_id[]" placeholder="EMP ID"></td>' +
-        '<td><input type="text" name="emp_name[]" placeholder="Employee name"></td>' +
         '<td><input type="text" name="user_no[]" placeholder="User No"></td>' +
+        '<td><input type="text" name="emp_name[]" placeholder="Employee name"></td>' +
         '<td><button type="button" class="btn btn-sm btn-rowdel" onclick="gpDelRow(this)">&#10005;</button></td>';
     tb.appendChild(tr);
 }
 function gpDelRow(btn) {
     var tb = document.querySelector('#empTable tbody');
     if (tb.rows.length <= 1) {
-        var inputs = btn.closest('tr').querySelectorAll('input');
-        inputs.forEach(function(i){ i.value = ''; });
+        btn.closest('tr').querySelectorAll('input').forEach(function(i){ i.value = ''; });
         return;
     }
     btn.closest('tr').remove();
 }
 <?php if ($saved_id > 0): ?>
-/* Auto-open the printable copy of the just-saved gate pass. */
 window.open('gate_pass_print.php?id=<?php echo $saved_id; ?>&auto=1', '_blank');
 <?php endif; ?>
 </script>

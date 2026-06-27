@@ -30,6 +30,36 @@ if (!$pass) {
 
 $employees = json_decode((string)($pass['employees_json'] ?? '[]'), true);
 if (!is_array($employees)) $employees = [];
+
+/* Enrich each employee with Saif Zone ID / Emirates ID / photo. Older gate
+   passes (saved before these fields existed) only stored name + user_no, so
+   we look the missing values up live from the employee record. */
+foreach ($employees as &$e) {
+    $e['saif_zone_id'] = $e['saif_zone_id'] ?? '';
+    $e['emirates_id']  = $e['emirates_id']  ?? '';
+    $e['photo']        = $e['photo']        ?? '';
+    $uno = trim((string)($e['user_no'] ?? ''));
+    $needs = ($e['saif_zone_id'] === '' && $e['emirates_id'] === '' && $e['photo'] === '');
+    if ($uno !== '' && $needs) {
+        $stmt = mysqli_prepare($conn, "SELECT saif_zone_id, emirates_id_number, photo, full_name
+            FROM employees WHERE user_no = ? LIMIT 1");
+        mysqli_stmt_bind_param($stmt, 's', $uno);
+        mysqli_stmt_execute($stmt);
+        $r2 = mysqli_stmt_get_result($stmt);
+        if ($row2 = mysqli_fetch_assoc($r2)) {
+            $e['saif_zone_id'] = trim((string)($row2['saif_zone_id'] ?? ''));
+            $e['emirates_id']  = trim((string)($row2['emirates_id_number'] ?? ''));
+            $e['photo']        = trim((string)($row2['photo'] ?? ''));
+            if (trim((string)($e['name'] ?? '')) === '') {
+                $e['name'] = trim((string)($row2['full_name'] ?? ''));
+            }
+        }
+        mysqli_stmt_close($stmt);
+    }
+}
+unset($e);
+
+$gp_subject = trim((string)($pass['subject'] ?? '')) ?: 'Request for Permission';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -53,9 +83,12 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
 .subject{font-size:15px;font-weight:700;margin-bottom:16px;}
 .body-text{font-size:15px;line-height:1.7;margin-bottom:16px;text-align:justify;}
 .emp-table{width:100%;border-collapse:collapse;margin:14px 0 22px;}
-.emp-table th,.emp-table td{border:1px solid #333;padding:8px 12px;font-size:14.5px;text-align:left;}
+.emp-table th,.emp-table td{border:1px solid #333;padding:8px 12px;font-size:14.5px;text-align:left;vertical-align:middle;}
 .emp-table th{background:#eef2f8;font-weight:700;letter-spacing:.5px;}
-.emp-table td.idcol{width:140px;text-align:center;}
+.emp-table td.idcol{width:150px;}
+.emp-table td.photocol{width:90px;text-align:center;padding:5px;}
+.emp-photo{height:78px;width:auto;max-width:72px;object-fit:cover;border:1px solid #999;border-radius:3px;display:inline-block;}
+.emp-photo-none{display:inline-block;width:64px;height:74px;border:1px dashed #aaa;border-radius:3px;color:#999;font-size:10px;line-height:74px;text-align:center;font-family:'Segoe UI',Arial,sans-serif;}
 .sign{margin-top:46px;font-size:15px;line-height:1.7;}
 .sign .line{margin-top:42px;border-top:1px solid #333;width:230px;}
 .passno{margin-top:6px;font-size:12px;color:#555;font-family:'Segoe UI',Arial,sans-serif;}
@@ -93,7 +126,7 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
         Sharjah, U.A.E.
     </div>
 
-    <div class="subject">Subject: Request for Permission</div>
+    <div class="subject">Subject: <?php echo gpp_h($gp_subject); ?></div>
 
     <div class="body-text">Dear Sir,</div>
 
@@ -111,15 +144,30 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
 
     <table class="emp-table">
         <thead>
-            <tr><th class="idcol">EMP ID</th><th>EMPLOYEE NAME</th></tr>
+            <tr>
+                <th class="idcol">SAIF ZONE ID</th>
+                <th class="idcol">EMIRATES ID</th>
+                <th>EMPLOYEE NAME</th>
+                <th class="photocol">PHOTO</th>
+            </tr>
         </thead>
         <tbody>
             <?php if (empty($employees)): ?>
-                <tr><td class="idcol">&nbsp;</td><td>&nbsp;</td></tr>
-            <?php else: foreach ($employees as $e): ?>
+                <tr><td class="idcol">&nbsp;</td><td class="idcol">&nbsp;</td><td>&nbsp;</td><td class="photocol">&nbsp;</td></tr>
+            <?php else: foreach ($employees as $e):
+                $photo = trim((string)($e['photo'] ?? ''));
+            ?>
                 <tr>
-                    <td class="idcol"><?php echo gpp_h($e['emp_id'] ?? ''); ?></td>
+                    <td class="idcol"><?php echo gpp_h($e['saif_zone_id'] ?? ''); ?></td>
+                    <td class="idcol"><?php echo gpp_h($e['emirates_id'] ?? ''); ?></td>
                     <td><?php echo gpp_h($e['name'] ?? ''); ?></td>
+                    <td class="photocol">
+                        <?php if ($photo !== ''): ?>
+                            <img class="emp-photo" src="uploads/<?php echo gpp_h($photo); ?>" alt="">
+                        <?php else: ?>
+                            <span class="emp-photo-none">No Photo</span>
+                        <?php endif; ?>
+                    </td>
                 </tr>
             <?php endforeach; endif; ?>
         </tbody>
