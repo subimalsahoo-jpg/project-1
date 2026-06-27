@@ -180,9 +180,12 @@ function role_permissions($role) {
     $map = [
         'hr' => [
             'dashboard_view', 'employee_view', 'employee_add',
-            'attendance_report', 'vacation_manage', 'reports_view',
-            'overtime_view', 'gratuity_view', 'visa_cancellation_manage', 'visa_insurance_view',
-            'leave_encashment_manage', 'accommodation_manage',
+            'attendance_report', 'attendance_upload',
+            'vacation_manage', 'leave_encashment_manage',
+            'visa_cancellation_manage', 'visa_insurance_view',
+            'accommodation_manage', 'complaints_manage',
+            'salary_slip_print', 'uploads_manage',
+            'overtime_view', 'gratuity_view', 'reports_view',
         ],
         'salary' => [
             'dashboard_view', 'employee_view', 'salary_view',
