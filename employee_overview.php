@@ -1073,6 +1073,12 @@ textarea { height: 48px; resize: vertical; }
         <?php if ($ov_on_vacation): ?>
         <div class="on-vacation-box">On Vacation</div>
         <?php endif; ?>
+        <?php if (hasPermission('gate_pass_manage')): ?>
+        <a href="gate_pass.php?search=<?php echo urlencode((string)$employee['user_no']); ?>"
+           class="btn" style="background:#0f766e;" title="Generate a SAIF Zone gate pass for this employee">
+            &#128682; Generate Gate Pass
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
