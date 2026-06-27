@@ -35,7 +35,20 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS employee_visa_renewals (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// ─── Auth check ───────────────────────────────────────────────────────────────
+/* Employee documents (Visa / Emirates ID / Passport / Other) — pdf or image. */
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS employee_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_no VARCHAR(50) NOT NULL,
+    employee_id VARCHAR(50) DEFAULT '',
+    doc_type VARCHAR(50) DEFAULT 'Other',
+    doc_number VARCHAR(100) DEFAULT '',
+    file_name VARCHAR(255) DEFAULT '',
+    original_name VARCHAR(255) DEFAULT '',
+    file_ext VARCHAR(10) DEFAULT '',
+    remarks VARCHAR(255) DEFAULT '',
+    created_by VARCHAR(100) DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 // ─── Auto-add missing columns (employees) ────────────────────────────────────
 $extra_columns = [
     "nationality         VARCHAR(100) DEFAULT ''",
@@ -235,6 +248,57 @@ if ($canEditEmployee && isset($_POST['delete_visarenewal'])) {
     $vid = (int)$_POST['delete_visarenewal'];
     if ($vid > 0) { mysqli_query($conn, "DELETE FROM employee_visa_renewals WHERE id=$vid"); }
     $message = "<div class='msg success'><span>✓</span> Visa renewal removed.</div>";
+}
+if ($canEditEmployee && isset($_POST['save_document'])) {
+    $u  = mysqli_real_escape_string($conn, trim($_POST['user_no'] ?? ''));
+    $ei = mysqli_real_escape_string($conn, trim($_POST['employee_id'] ?? ''));
+    $allowed_doc_types = ['Visa', 'Emirates ID', 'Passport', 'Other'];
+    $dt_raw = in_array($_POST['doc_type'] ?? 'Other', $allowed_doc_types, true) ? $_POST['doc_type'] : 'Other';
+    $dt = mysqli_real_escape_string($conn, $dt_raw);
+    $dn = mysqli_real_escape_string($conn, trim($_POST['doc_number'] ?? ''));
+    $rk = mysqli_real_escape_string($conn, trim($_POST['doc_remarks'] ?? ''));
+    $cb = mysqli_real_escape_string($conn, $ov_user);
+    if ($u === '') {
+        $message = "<div class='msg error'><span>!</span> Employee not selected.</div>";
+    } elseif (!isset($_FILES['doc_file']) || $_FILES['doc_file']['name'] === '' || $_FILES['doc_file']['error'] !== UPLOAD_ERR_OK) {
+        $message = "<div class='msg error'><span>!</span> Please choose a PDF or image file to upload.</div>";
+    } else {
+        $allowed_ext = ['pdf', 'jpg', 'jpeg', 'png'];
+        $ext = strtolower(pathinfo($_FILES['doc_file']['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed_ext, true)) {
+            $message = "<div class='msg error'><span>!</span> Only PDF, JPG or PNG files are allowed.</div>";
+        } elseif ((int)$_FILES['doc_file']['size'] > 10 * 1024 * 1024) {
+            $message = "<div class='msg error'><span>!</span> File too large (max 10 MB).</div>";
+        } else {
+            if (!is_dir("uploads/documents")) { mkdir("uploads/documents", 0755, true); }
+            $orig = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES['doc_file']['name']));
+            $stored = 'doc_' . trim($_POST['user_no'] ?? '') . '_' . time() . '_' . mt_rand(100, 999) . '.' . $ext;
+            $stored = preg_replace('/[^a-zA-Z0-9._-]/', '_', $stored);
+            if (move_uploaded_file($_FILES['doc_file']['tmp_name'], "uploads/documents/" . $stored)) {
+                $sf = mysqli_real_escape_string($conn, $stored);
+                $so = mysqli_real_escape_string($conn, $orig);
+                $sx = mysqli_real_escape_string($conn, $ext);
+                mysqli_query($conn, "INSERT INTO employee_documents
+                    (user_no, employee_id, doc_type, doc_number, file_name, original_name, file_ext, remarks, created_by)
+                    VALUES ('$u','$ei','$dt','$dn','$sf','$so','$sx','$rk','$cb')");
+                $message = "<div class='msg success'><span>✓</span> Document uploaded.</div>";
+            } else {
+                $message = "<div class='msg error'><span>!</span> Upload failed. Please try again.</div>";
+            }
+        }
+    }
+}
+if ($canEditEmployee && isset($_POST['delete_document'])) {
+    $did = (int)$_POST['delete_document'];
+    if ($did > 0) {
+        $dq = mysqli_query($conn, "SELECT file_name FROM employee_documents WHERE id=$did LIMIT 1");
+        if ($dq && ($drow = mysqli_fetch_assoc($dq))) {
+            $fp = "uploads/documents/" . $drow['file_name'];
+            if ($drow['file_name'] !== '' && is_file($fp)) { @unlink($fp); }
+        }
+        mysqli_query($conn, "DELETE FROM employee_documents WHERE id=$did");
+    }
+    $message = "<div class='msg success'><span>✓</span> Document removed.</div>";
 }
 
 // ─── Search employee ──────────────────────────────────────────────────────────
@@ -923,6 +987,7 @@ textarea { height: 48px; resize: vertical; }
             'airticket'  => ['✈️', 'Air Ticket'],
             'visarenewal'=> ['🛂', 'Visa Renewal'],
             'complain'   => ['📝', 'Complaints'],
+            'documents'  => ['📎', 'Documents'],
         ];
         foreach ($tabs as $key => [$icon, $label]):
             if ($isViewerRole && !in_array($key, $viewerAllowedTabs, true)) {
@@ -2158,6 +2223,82 @@ elseif ($employee && $currentTab === 'visarenewal'):
             </tbody>
         </table>
         </div>
+    </div>
+</div>
+
+<?php
+/* ══ TAB: DOCUMENTS ═══════════════════════════════════════════════════════ */
+elseif ($employee && $currentTab === 'documents'):
+    $du = mysqli_real_escape_string($conn, $employee['user_no']);
+    $doc_res = mysqli_query($conn, "SELECT * FROM employee_documents WHERE user_no='$du' ORDER BY id DESC");
+    $doc_rows = [];
+    if ($doc_res) { while ($r = mysqli_fetch_assoc($doc_res)) { $doc_rows[] = $r; } }
+?>
+<div class="card" style="margin-bottom:18px;">
+    <div class="card-header">📎 Employee Documents
+        <span style="float:right;font-weight:600;font-size:13px;">Total: <?= count($doc_rows) ?></span>
+    </div>
+    <div class="card-body">
+        <?php if ($canEditEmployee): ?>
+        <form method="POST" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;">
+            <input type="hidden" name="user_no" value="<?= val($employee,'user_no') ?>">
+            <input type="hidden" name="employee_id" value="<?= val($employee,'employee_id') ?>">
+            <div><label style="font-size:12px;display:block;">Document Type</label>
+                <select name="doc_type">
+                    <option value="Visa">Visa</option>
+                    <option value="Emirates ID">Emirates ID</option>
+                    <option value="Passport">Passport</option>
+                    <option value="Other">Other</option>
+                </select></div>
+            <div><label style="font-size:12px;display:block;">Document No (optional)</label><input type="text" name="doc_number" placeholder="e.g. 784-xxxx"></div>
+            <div><label style="font-size:12px;display:block;">File (PDF / JPG / PNG)</label><input type="file" name="doc_file" accept=".pdf,.jpg,.jpeg,.png" required></div>
+            <div><label style="font-size:12px;display:block;">Remarks</label><input type="text" name="doc_remarks" placeholder="optional"></div>
+            <button type="submit" name="save_document" class="btn">⬆️ Upload</button>
+        </form>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">JPG/PNG files are shown as a preview. PDF files are not previewed but can be downloaded. Max 10&nbsp;MB.</div>
+        <?php endif; ?>
+
+        <?php if (!empty($doc_rows)): ?>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;">
+            <?php foreach ($doc_rows as $r):
+                $ext = strtolower($r['file_ext']);
+                $url = 'uploads/documents/' . rawurlencode($r['file_name']);
+                $is_img = in_array($ext, ['jpg','jpeg','png'], true);
+            ?>
+            <div style="width:230px;border:1px solid var(--border,#e2e8f0);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.06);">
+                <div style="background:#1a3a5c;color:#fff;padding:7px 10px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">
+                    <span><?= htmlspecialchars($r['doc_type'], ENT_QUOTES) ?></span>
+                    <span style="text-transform:uppercase;font-size:10px;opacity:.85;"><?= htmlspecialchars($ext, ENT_QUOTES) ?></span>
+                </div>
+                <?php if ($is_img): ?>
+                    <a href="<?= $url ?>" target="_blank" title="Open full image">
+                        <img src="<?= $url ?>" alt="document" style="width:100%;height:150px;object-fit:cover;display:block;">
+                    </a>
+                <?php else: ?>
+                    <div style="height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f8fafc;color:#b91c1c;">
+                        <div style="font-size:46px;">📄</div>
+                        <div style="font-size:12px;color:#475569;margin-top:4px;">PDF document</div>
+                    </div>
+                <?php endif; ?>
+                <div style="padding:9px 10px;">
+                    <?php if ($r['doc_number'] !== ''): ?><div style="font-size:12px;"><b>No:</b> <?= htmlspecialchars($r['doc_number'], ENT_QUOTES) ?></div><?php endif; ?>
+                    <?php if ($r['remarks'] !== ''): ?><div style="font-size:12px;color:#475569;"><?= htmlspecialchars($r['remarks'], ENT_QUOTES) ?></div><?php endif; ?>
+                    <div style="font-size:11px;color:#94a3b8;margin:4px 0 8px;"><?= $r['created_at'] ? date('d-M-Y', strtotime($r['created_at'])) : '' ?></div>
+                    <div style="display:flex;gap:6px;">
+                        <a href="<?= $url ?>" <?= $is_img ? 'target="_blank"' : 'download' ?> class="btn" style="padding:5px 10px;font-size:12px;flex:1;text-align:center;"><?= $is_img ? '🔍 View' : '⬇️ Download' ?></a>
+                        <?php if ($canEditEmployee): ?>
+                        <form method="POST" onsubmit="return confirm('Delete this document?');" style="margin:0;">
+                            <button type="submit" name="delete_document" value="<?= (int)$r['id'] ?>" class="btn" style="background:#fdecea;color:#c0392b;padding:5px 10px;font-size:12px;">Delete</button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php else: ?>
+            <div style="color:var(--text-dim);padding:20px;">No documents uploaded yet.</div>
+        <?php endif; ?>
     </div>
 </div>
 
