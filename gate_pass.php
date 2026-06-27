@@ -281,6 +281,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
 
     if ($leave_date === '' || empty($employees)) {
         $message = "<div class='gp-msg err'>Please provide a leave date and at least one employee.</div>";
+    } elseif (count($employees) > 4) {
+        $message = "<div class='gp-msg err'>A gate pass can have a maximum of 4 employees. Please remove some, or create a separate gate pass.</div>";
     } elseif ($reason === '') {
         $message = "<div class='gp-msg err'>Please select a Reason before generating the gate pass.</div>";
     } else {
@@ -552,7 +554,7 @@ table.list tr:hover td{background:#f8fafc;}
                     </tbody>
                 </table>
                 <?php endif; ?>
-                <div class="muted" style="margin-top:6px;">Saif Zone ID, Emirates ID and the photo are pulled automatically from the employee record (matched by User No).</div>
+                <div class="muted" style="margin-top:6px;"><?php echo $from_overview ? '' : '<b>Up to 4 employees per gate pass.</b> '; ?>Saif Zone ID, Emirates ID and the photo are pulled automatically from the employee record (matched by User No).</div>
 
                 <div class="actions">
                     <button type="submit" class="btn btn-accent">&#128682; Generate &amp; Save Gate Pass</button>
@@ -685,6 +687,10 @@ function gpAddEmp(userNo, name) {
     var tb = document.getElementById('empBody');
     if (!tb) return;
     var existing = tb.querySelectorAll('input[name="user_no[]"]');
+    if (existing.length >= 4) {
+        alert('You can add up to 4 employees per gate pass.\n\nTo include more, generate this gate pass first, then create a new one.');
+        return;
+    }
     for (var i = 0; i < existing.length; i++) {
         if (existing[i].value === String(userNo)) { return; }
     }

@@ -60,6 +60,18 @@ foreach ($employees as &$e) {
 unset($e);
 
 $gp_subject = trim((string)($pass['subject'] ?? '')) ?: 'Request for Permission';
+
+/* Scale the photo + spacing to the number of employees so the whole pass
+   always fits on ONE A4 page. 1 employee = largest photo; more rows shrink
+   the photo and tighten the spacing progressively. */
+$emp_n = max(1, count($employees));
+if     ($emp_n <= 1) { $photo_h = 92; $row_pad = 9; $blk_gap = 16; $sign_top = 46; }
+elseif ($emp_n == 2) { $photo_h = 78; $row_pad = 7; $blk_gap = 14; $sign_top = 36; }
+elseif ($emp_n == 3) { $photo_h = 62; $row_pad = 6; $blk_gap = 12; $sign_top = 28; }
+elseif ($emp_n == 4) { $photo_h = 52; $row_pad = 5; $blk_gap = 10; $sign_top = 22; }
+elseif ($emp_n <= 6) { $photo_h = 44; $row_pad = 4; $blk_gap = 8;  $sign_top = 18; }
+else                 { $photo_h = 36; $row_pad = 3; $blk_gap = 7;  $sign_top = 14; }
+$photo_w = max(28, $photo_h - 8);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,8 +109,26 @@ body{font-family:'Times New Roman',Georgia,serif;background:#e9edf3;color:#111;}
     .toolbar{display:none!important;}
     body{background:#fff;}
     .sheet{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;}
-    @page{size:A4;margin:14mm 16mm;}
+    .emp-table,.emp-table tr,.emp-table thead,.emp-table tbody{page-break-inside:avoid;}
+    .sign{page-break-inside:avoid;}
+    @page{size:A4;margin:12mm 15mm;}
 }
+</style>
+<!-- Per-employee-count scaling so everything stays on one A4 page -->
+<style>
+.letterhead{margin-bottom:<?php echo max(12, $blk_gap + 2); ?>px;}
+.doc-date{margin-bottom:<?php echo max(4, $blk_gap - 8); ?>px;}
+.doc-title{margin:<?php echo $blk_gap; ?>px 0 <?php echo $blk_gap + 4; ?>px;}
+.to-block{margin-bottom:<?php echo $blk_gap; ?>px;}
+.subject{margin-bottom:<?php echo $blk_gap; ?>px;}
+.body-text{margin-bottom:<?php echo $blk_gap; ?>px;}
+.emp-table{margin:<?php echo max(8, $blk_gap - 4); ?>px 0 <?php echo $blk_gap; ?>px;}
+.emp-table th,.emp-table td{padding:<?php echo $row_pad; ?>px 12px;}
+.emp-table td.photocol{padding:<?php echo max(3, $row_pad - 2); ?>px;}
+.emp-photo{height:<?php echo $photo_h; ?>px;max-width:<?php echo $photo_w; ?>px;}
+.emp-photo-none{height:<?php echo max(24, $photo_h - 4); ?>px;line-height:<?php echo max(24, $photo_h - 4); ?>px;width:<?php echo $photo_w; ?>px;}
+.sign{margin-top:<?php echo $sign_top; ?>px;}
+.sign .line{margin-top:<?php echo max(22, $sign_top - 4); ?>px;}
 </style>
 </head>
 <body>
