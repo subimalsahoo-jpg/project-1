@@ -50,6 +50,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     }
 }
 
+/* Delete a complaint — Admin only. */
+$can_delete_complaint = function_exists('is_admin_user') ? is_admin_user() : false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_complaint']) && $can_delete_complaint) {
+    $cid = (int)($_POST['delete_complaint'] ?? 0);
+    if ($cid > 0) {
+        $stmt = mysqli_prepare($conn, "DELETE FROM complaints WHERE id=?");
+        mysqli_stmt_bind_param($stmt, 'i', $cid);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+}
+
 /* Filters */
 $f_view   = $_GET['view'] ?? 'all';      // all | open | closed
 $f_status = $_GET['status'] ?? '';
@@ -221,6 +233,11 @@ tbody td.l{text-align:left;}
                                 <input type="text" name="hr_reply" value="<?php echo cmp_h($c['hr_reply']); ?>" placeholder="Reply" style="width:120px;">
                                 <button class="btn btn-primary" type="submit" name="update_status" style="padding:5px 10px;">Save</button>
                             </form>
+                            <?php if ($can_delete_complaint): ?>
+                            <form method="POST" style="margin-top:5px;" onsubmit="return confirm('Permanently delete this complaint? This cannot be undone.');">
+                                <button class="btn" type="submit" name="delete_complaint" value="<?php echo (int)$c['id']; ?>" style="padding:5px 10px;background:#fee2e2;color:#b91c1c;">&#128465; Delete</button>
+                            </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; else: ?>
