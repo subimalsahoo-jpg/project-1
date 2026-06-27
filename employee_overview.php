@@ -1000,6 +1000,13 @@ textarea { height: 48px; resize: vertical; }
             <?= $icon ?> <?= $label ?>
         </a>
         <?php endforeach; ?>
+        <?php if (hasPermission('gate_pass_manage')): ?>
+        <a href="gate_pass.php?search=<?= urlencode((string)$employee['user_no']) ?>"
+           class="tab-pill" style="background:#0f766e;color:#fff;border-color:#0f766e;"
+           title="Generate a SAIF Zone gate pass for this employee">
+            🚪 Gate Pass
+        </a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 </div>
@@ -1072,12 +1079,6 @@ textarea { height: 48px; resize: vertical; }
         <div class="status-big <?php echo $ov_cls; ?>"><?php echo htmlspecialchars($ov_status, ENT_QUOTES, 'UTF-8'); ?></div>
         <?php if ($ov_on_vacation): ?>
         <div class="on-vacation-box">On Vacation</div>
-        <?php endif; ?>
-        <?php if (hasPermission('gate_pass_manage')): ?>
-        <a href="gate_pass.php?search=<?php echo urlencode((string)$employee['user_no']); ?>"
-           class="btn" style="background:#0f766e;" title="Generate a SAIF Zone gate pass for this employee">
-            &#128682; Generate Gate Pass
-        </a>
         <?php endif; ?>
     </div>
 </div>
