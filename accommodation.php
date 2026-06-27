@@ -71,23 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flash = "Room updated ($eloc &middot; " . ($tb !== '' ? ac_h($tb) . ' &middot; ' : '') . "Room " . ac_h($rn) . ").";
         }
         $gender = $g;
-    } elseif ($action === 'prefix_tower') {
-        // Bulk: put "A" in front of every Tower/Block that does not already
-        // start with "A" (idempotent). Scoped to the current gender (+location).
-        $g  = ($_POST['gender'] ?? '') === 'Girls' ? 'Girls' : 'Boys';
-        $pfx = trim($_POST['prefix'] ?? 'A');
-        if ($pfx === '') { $pfx = 'A'; }
-        $eg  = acc_esc($conn, $g);
-        $epfx = acc_esc($conn, $pfx);
-        $where = "gender='$eg' AND tower_block IS NOT NULL AND tower_block <> '' AND tower_block NOT LIKE '$epfx%'";
-        if (in_array($_POST['loc'] ?? '', $LOCATIONS, true)) {
-            $where .= " AND main_location='" . acc_esc($conn, $_POST['loc']) . "'";
-        }
-        mysqli_query($conn, "UPDATE accommodation_rooms SET tower_block = CONCAT('$epfx', tower_block) WHERE $where");
-        $changed = mysqli_affected_rows($conn);
-        $flash = "Added prefix \"" . ac_h($pfx) . "\" to $changed Tower/Block value(s).";
-        $gender = $g;
-        if (in_array($_POST['loc'] ?? '', $LOCATIONS, true)) { $loc = $_POST['loc']; }
     } elseif ($action === 'delete_room') {
         $rid = (int)($_POST['room_id'] ?? 0);
         if ($rid > 0) {
@@ -391,16 +374,7 @@ tbody td.l{text-align:left;}
     <div class="panel">
         <div class="panel-head">
             <span><?php echo $gender; ?> Accommodation Details<?php echo $loc !== '' ? ' &middot; ' . ac_h($loc) : ' &middot; All Locations'; ?></span>
-            <span style="display:flex;gap:8px;">
-                <form method="POST" style="display:inline;" onsubmit="return confirm('Add \'A\' in front of every Tower/Block in this view (that does not already start with A)?');">
-                    <input type="hidden" name="action" value="prefix_tower">
-                    <input type="hidden" name="gender" value="<?php echo $gender; ?>">
-                    <input type="hidden" name="loc" value="<?php echo ac_h($loc); ?>">
-                    <input type="hidden" name="prefix" value="A">
-                    <button class="btn btn-sm btn-gray" type="submit" title="Prefix all Tower/Block numbers with A">&#9998; Add &quot;A&quot; to all Tower/Block</button>
-                </form>
-                <a class="btn btn-sm btn-success" href="accommodation.php?export=excel&gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">&#11015; Export Excel</a>
-            </span>
+            <a class="btn btn-sm btn-success" href="accommodation.php?export=excel&gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">&#11015; Export Excel</a>
         </div>
         <div class="panel-body">
             <div class="table-wrap">
