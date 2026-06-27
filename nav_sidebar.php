@@ -154,6 +154,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('reports_view') || hasPermission('employee_view')): ?>
         <a href="ex_employee_records.php" class="<?php echo appnav_active('ex_employee_records.php'); ?>">&#128188; Ex-Employee Records</a>
         <?php endif; ?>
+        <?php if (hasPermission('complaints_manage')): ?>
+        <a href="complaints.php" class="<?php echo appnav_active('complaints.php'); ?>">&#128221; Complaints</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 

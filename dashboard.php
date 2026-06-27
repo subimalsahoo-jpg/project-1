@@ -124,6 +124,17 @@ $expired_visas = visa_expired_list($conn);
    within one month. */
 $passport_expire_count = passport_alert_count($conn);
 
+/* Open complaints (Pending / In Progress) — surfaced on login so HR can
+   act on them. Closed = Solved / Rejected. */
+$open_complaints_count = 0;
+$complaints_tbl = mysqli_query($conn, "SHOW TABLES LIKE 'complaints'");
+if ($complaints_tbl && mysqli_num_rows($complaints_tbl) > 0) {
+    $open_complaints_count = safe_count($conn, "
+        SELECT COUNT(*) AS total FROM complaints
+        WHERE complaint_status IS NULL OR complaint_status='' OR complaint_status IN ('Pending','In Progress')
+    ");
+}
+
 $totalvacationToday = 0;
 $vacationCheck = mysqli_query($conn, "SHOW TABLES LIKE 'vacations'");
 if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
@@ -963,6 +974,11 @@ body {
                 &#128217; Passport Expiring Soon: <?php echo $passport_expire_count; ?>
             </a>
             <?php endif; ?>
+            <?php if ($open_complaints_count > 0 && hasPermission('complaints_manage')): ?>
+            <a href="complaints.php?view=open" class="btn-visa" style="background:#7c3aed;">
+                &#128221; Open Complaints: <?php echo $open_complaints_count; ?>
+            </a>
+            <?php endif; ?>
             <a href="logout.php" class="btn-logout">&#128682; Logout</a>
         </div>
     </div>
@@ -1039,6 +1055,15 @@ body {
                 <p>&#127965; On Vacation Today</p>
             </div>
         </a>
+
+        <?php if (hasPermission('complaints_manage')): ?>
+        <a href="complaints.php?view=open" class="card-link">
+            <div class="card">
+                <h1><?php echo number_format($open_complaints_count); ?></h1>
+                <p>&#128221; Open Complaints</p>
+            </div>
+        </a>
+        <?php endif; ?>
 
     </div>
 
