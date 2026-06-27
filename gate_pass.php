@@ -281,13 +281,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
 
     if ($leave_date === '' || empty($employees)) {
         $message = "<div class='gp-msg err'>Please provide a leave date and at least one employee.</div>";
+    } elseif ($reason === '') {
+        $message = "<div class='gp-msg err'>Please select a Reason before generating the gate pass.</div>";
     } else {
         $pass_date     = date('Y-m-d');
         $return_date_db = ($return_date !== '') ? $return_date : null;
         $employees_json = json_encode($employees, JSON_UNESCAPED_UNICODE);
         $employee_summary = mb_substr(implode(', ', $summary_parts), 0, 500);
         $employee_count = count($employees);
-        $created_by = trim((string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? ''));
+        /* Record who generated this pass (handle empty full_name gracefully). */
+        $created_by = trim((string)($_SESSION['full_name'] ?? ''));
+        if ($created_by === '') $created_by = trim((string)($_SESSION['username'] ?? ''));
+        if ($created_by === '') $created_by = trim((string)($_SESSION['role'] ?? 'User'));
         $pass_no = '';
 
         $stmt = mysqli_prepare($conn, "INSERT INTO gate_passes
@@ -503,8 +508,8 @@ table.list tr:hover td{background:#f8fafc;}
                         <?php echo gp_time_selects('return', 6, '00', 'PM'); ?>
                     </div>
                     <div class="fg">
-                        <label>Reason</label>
-                        <select name="reason">
+                        <label>Reason *</label>
+                        <select name="reason" required>
                             <option value="">&mdash; Select reason &mdash;</option>
                             <?php foreach ($reasons as $rr): ?>
                             <option value="<?php echo gp_h($rr['reason_text']); ?>"><?php echo gp_h($rr['reason_text']); ?></option>
@@ -615,7 +620,7 @@ table.list tr:hover td{background:#f8fafc;}
                             <div class="muted"><?php echo (int)$r['employee_count']; ?> employee(s)</div>
                         </td>
                         <td><?php echo gp_h($r['reason']); ?></td>
-                        <td><?php echo gp_h($r['created_by']); ?></td>
+                        <td><?php echo trim((string)$r['created_by']) !== '' ? gp_h($r['created_by']) : '<span class="muted">&mdash;</span>'; ?></td>
                         <td style="text-align:right;white-space:nowrap;">
                             <a class="btn btn-sm btn-print" href="gate_pass_print.php?id=<?php echo (int)$r['id']; ?>&auto=1" target="_blank" rel="noopener">&#128438; Print</a>
                             <?php if ($is_admin): ?>
