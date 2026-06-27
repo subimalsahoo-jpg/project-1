@@ -107,6 +107,14 @@ body { padding-left: 250px; }
     </div>
     <?php endif; ?>
 
+    <?php if (hasPermission('recruitment_manage')): ?>
+    <div class="appnav-title" onclick="appnavToggle('recruit')">&#129309; Recruitment <span class="appnav-caret">&#9662;</span></div>
+    <div class="appnav-sub" id="appnav-recruit">
+        <a href="recruitment.php" class="<?php echo appnav_active('recruitment.php'); ?>">&#128100; Candidates &amp; Interviews</a>
+        <a href="offer_letter.php" class="<?php echo appnav_active('offer_letter.php'); ?>">&#128221; Offer Letter</a>
+    </div>
+    <?php endif; ?>
+
     <?php if (hasPermission('salary_view') || hasPermission('salary_slip_print') || hasPermission('attendance_report') || hasPermission('reports_view') || hasPermission('salary_generate') || hasPermission('advance_manage') || hasPermission('wps_manage') || hasPermission('overtime_view') || hasPermission('gratuity_view') || hasPermission('visa_cancellation_manage') || hasPermission('visa_insurance_view') || hasPermission('employee_view')): ?>
     <div class="appnav-title" onclick="appnavToggle('report')">&#128202; Reports <span class="appnav-caret">&#9662;</span></div>
     <div class="appnav-sub" id="appnav-report">
