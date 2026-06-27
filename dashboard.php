@@ -171,6 +171,46 @@ if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
     $activeEmployees = max(0, $activeEmployees - $activeVacationToday);
 }
 
+/* ─────────────────────────────────────────────
+   Reminder ribbon data: employees due back from vacation THIS MONTH
+   who have NOT yet re-joined. "Joined" = an attendance check-in on or
+   after their (effective) return date — so the moment their name shows
+   up in the attendance sheet, they drop off this list automatically.
+───────────────────────────────────────────── */
+$vacation_return_list = [];
+if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
+    $month_start = date('Y-m-01');
+    $month_end   = date('Y-m-t');
+    $eff_return  = "COALESCE(NULLIF(v.return_date,'0000-00-00'), v.to_date)";
+    $vr_q = mysqli_query($conn, "
+        SELECT v.user_no,
+               COALESCE(e.full_name, v.employee_name, '') AS full_name,
+               COALESCE(e.department, '') AS department,
+               $eff_return AS eff_return
+        FROM vacations v
+        LEFT JOIN employees e ON TRIM(e.user_no) = TRIM(v.user_no)
+        WHERE $eff_return BETWEEN '$month_start' AND '$month_end'
+          AND COALESCE(v.vacation_status,'') NOT IN ('Cancelled','Returned')
+          AND NOT EXISTS (
+              SELECT 1 FROM attendance a
+              WHERE TRIM(a.user_no) = TRIM(v.user_no)
+                AND a.check_in IS NOT NULL
+                AND TRIM(a.check_in) <> ''
+                AND a.attendance_date >= $eff_return
+          )
+        ORDER BY eff_return ASC
+    ");
+    if ($vr_q) {
+        $seen = [];
+        while ($vr = mysqli_fetch_assoc($vr_q)) {
+            $uno = trim((string)$vr['user_no']);
+            if ($uno === '' || isset($seen[$uno])) continue;
+            $seen[$uno] = true;
+            $vacation_return_list[] = $vr;
+        }
+    }
+}
+
 $dashboard_active_employee_condition = "employees.user_no IS NOT NULL";
 if ($status_col) {
     $dashboard_active_employee_condition .= " AND (
@@ -508,7 +548,18 @@ body {
 .visa-ribbon-item b{color:#ffe08a;font-weight:800;}
 .visa-ribbon-sep{color:rgba(255,255,255,.45);font-size:9px;}
 @keyframes visaRibbonScroll{ from{transform:translateX(-50%);} to{transform:translateX(0);} }
-@media (prefers-reduced-motion: reduce){ .visa-ribbon-content{animation:none;} }
+
+/* ── Vacation-return reminder ribbon (scrolls right → left) ── */
+.vac-ribbon{display:flex;align-items:stretch;background:#047857;color:#fff;border-radius:10px;margin:0 0 20px;overflow:hidden;box-shadow:0 3px 12px rgba(4,120,87,.35);}
+.vac-ribbon-label{flex:0 0 auto;display:flex;align-items:center;background:#065f46;padding:0 16px;font-weight:800;font-size:13px;letter-spacing:.6px;white-space:nowrap;}
+.vac-ribbon-track{flex:1;overflow:hidden;position:relative;}
+.vac-ribbon-content{display:inline-flex;align-items:center;white-space:nowrap;padding:11px 0;will-change:transform;animation:vacRibbonScroll 45s linear infinite;}
+.vac-ribbon:hover .vac-ribbon-content{animation-play-state:paused;}
+.vac-ribbon-item{padding:0 14px;font-size:13.5px;font-weight:600;}
+.vac-ribbon-item b{color:#bbf7d0;font-weight:800;}
+.vac-ribbon-sep{color:rgba(255,255,255,.45);font-size:9px;}
+@keyframes vacRibbonScroll{ from{transform:translateX(0);} to{transform:translateX(-50%);} }
+@media (prefers-reduced-motion: reduce){ .visa-ribbon-content,.vac-ribbon-content{animation:none;} }
 
 .user-badge {
     display: flex;
@@ -1048,6 +1099,31 @@ body {
                            . ' &mdash; Visa expired <b>' . $__expd . '</b>'
                            . ($__days > 0 ? ' (' . $__days . ' day' . ($__days > 1 ? 's' : '') . ' ago)' : '')
                            . '</span><span class="visa-ribbon-sep">&#9679;</span>';
+                    }
+                }
+                ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($vacation_return_list)): ?>
+    <!-- ── Vacation-return reminder ribbon (continuous scroll, right → left) ── -->
+    <div class="vac-ribbon" title="Employees due back from vacation this month — auto-hides once they check in">
+        <span class="vac-ribbon-label">&#127965; BACK FROM VACATION &mdash; THIS MONTH</span>
+        <div class="vac-ribbon-track">
+            <div class="vac-ribbon-content">
+                <?php
+                for ($__r = 0; $__r < 2; $__r++) { // duplicated for a seamless loop
+                    foreach ($vacation_return_list as $__v) {
+                        $__name = htmlspecialchars((string)($__v['full_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__uno  = htmlspecialchars((string)($__v['user_no'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__dept = htmlspecialchars((string)($__v['department'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $__ret  = !empty($__v['eff_return']) ? date('d-m-Y', strtotime($__v['eff_return'])) : '';
+                        echo '<span class="vac-ribbon-item">&#128100; <b>' . $__name . '</b> (' . $__uno . ')'
+                           . ($__dept !== '' ? ' &middot; ' . $__dept : '')
+                           . ($__ret !== '' ? ' &mdash; returns <b>' . $__ret . '</b>' : '')
+                           . '</span><span class="vac-ribbon-sep">&#9679;</span>';
                     }
                 }
                 ?>
