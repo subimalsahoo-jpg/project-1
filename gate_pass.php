@@ -50,6 +50,32 @@ function gp_time_ampm($v) {
     return $t ? date('g:i A', $t) : $v;
 }
 
+/* Render a 12-hour time picker (hour 1-12 / minute / AM-PM) as three selects,
+   so the time always displays in 12-hour format regardless of OS locale. */
+function gp_time_selects($prefix, $defHour, $defMin, $defAp) {
+    $h  = '<div class="time-pick">';
+    $h .= '<select name="' . $prefix . '_hour">';
+    for ($i = 1; $i <= 12; $i++) {
+        $sel = ((int)$i === (int)$defHour) ? 'selected' : '';
+        $h  .= '<option value="' . $i . '" ' . $sel . '>' . str_pad((string)$i, 2, '0', STR_PAD_LEFT) . '</option>';
+    }
+    $h .= '</select><span class="time-colon">:</span>';
+    $h .= '<select name="' . $prefix . '_min">';
+    for ($m = 0; $m < 60; $m += 5) {
+        $mm  = str_pad((string)$m, 2, '0', STR_PAD_LEFT);
+        $sel = ($mm === $defMin) ? 'selected' : '';
+        $h  .= '<option value="' . $mm . '" ' . $sel . '>' . $mm . '</option>';
+    }
+    $h .= '</select>';
+    $h .= '<select name="' . $prefix . '_ampm">';
+    foreach (['AM', 'PM'] as $ap) {
+        $sel = ($ap === $defAp) ? 'selected' : '';
+        $h  .= '<option value="' . $ap . '" ' . $sel . '>' . $ap . '</option>';
+    }
+    $h .= '</select></div>';
+    return $h;
+}
+
 /* Ensure a column exists on a table (simple migration helper). */
 function gp_ensure_column($conn, $table, $column, $definition) {
     $safe_t = mysqli_real_escape_string($conn, $table);
@@ -205,8 +231,8 @@ function gp_employee_snapshot($conn, $user_no, $fallback_name = '') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
     $leave_date  = trim($_POST['leave_date'] ?? '');
     $return_date = trim($_POST['return_date'] ?? '');
-    $depart_time = gp_time_ampm($_POST['depart_time'] ?? '');
-    $return_time = gp_time_ampm($_POST['return_time'] ?? '');
+    $depart_time = gp_time_ampm(trim(($_POST['depart_hour'] ?? '') . ':' . ($_POST['depart_min'] ?? '') . ' ' . ($_POST['depart_ampm'] ?? '')));
+    $return_time = gp_time_ampm(trim(($_POST['return_hour'] ?? '') . ':' . ($_POST['return_min'] ?? '') . ' ' . ($_POST['return_ampm'] ?? '')));
     $subject     = trim($_POST['subject'] ?? '') ?: 'Request for Permission';
     $reason      = trim($_POST['reason'] ?? '');
 
@@ -251,7 +277,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pass'])) {
         mysqli_stmt_close($stmt);
 
         if ($new_id > 0) {
-            $pass_no = 'GP-' . date('Y') . '-' . str_pad((string)$new_id, 4, '0', STR_PAD_LEFT);
+            /* Monthly serial: GP-YYYY-MM-NNN where NNN restarts each month. */
+            $ym = date('Y-m');
+            $cnt_row = mysqli_fetch_assoc(mysqli_query($conn,
+                "SELECT COUNT(*) AS c FROM gate_passes WHERE DATE_FORMAT(pass_date,'%Y-%m') = '" . mysqli_real_escape_string($conn, $ym) . "'"));
+            $serial = max(1, (int)($cnt_row['c'] ?? 1));
+            $pass_no = 'GP-' . date('Y') . '-' . date('m') . '-' . str_pad((string)$serial, 3, '0', STR_PAD_LEFT);
             $up = mysqli_prepare($conn, "UPDATE gate_passes SET pass_no=? WHERE id=?");
             mysqli_stmt_bind_param($up, 'si', $pass_no, $new_id);
             mysqli_stmt_execute($up);
@@ -357,6 +388,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .fg label{font-size:13px;font-weight:700;color:var(--brand);}
 .fg input,.fg select{padding:10px 12px;border:1.6px solid #f1c27a;border-radius:8px;font-size:14px;font-family:inherit;background:#fffaf2;transition:border-color .15s,box-shadow .15s;}
 .fg input:focus,.fg select:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(232,160,32,.22);}
+.time-pick{display:flex;align-items:center;gap:6px;}
+.time-pick select{padding:10px 8px;border:1.6px solid #f1c27a;border-radius:8px;font-size:14px;font-family:inherit;background:#fffaf2;transition:border-color .15s,box-shadow .15s;}
+.time-pick select:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(232,160,32,.22);}
+.time-pick .time-colon{font-weight:800;color:var(--brand);}
 .emp-table{width:100%;border-collapse:collapse;margin-top:6px;}
 .emp-table th{background:var(--brand);color:#fff;font-size:12px;text-align:left;padding:8px 10px;}
 .emp-table td{padding:6px 8px;border-bottom:1px solid var(--gray-200);}
@@ -423,15 +458,15 @@ table.list tr:hover td{background:#f8fafc;}
                     </div>
                     <div class="fg">
                         <label>Departure Time</label>
-                        <input type="time" name="depart_time" value="09:00">
+                        <?php echo gp_time_selects('depart', 9, '00', 'AM'); ?>
                     </div>
                     <div class="fg">
                         <label>Return Date</label>
                         <input type="date" name="return_date" value="<?php echo gp_h(date('Y-m-d')); ?>">
                     </div>
                     <div class="fg">
-                        <label>Return Time (same day)</label>
-                        <input type="time" name="return_time" value="18:00">
+                        <label>Return Time</label>
+                        <?php echo gp_time_selects('return', 6, '00', 'PM'); ?>
                     </div>
                     <div class="fg">
                         <label>Reason</label>
