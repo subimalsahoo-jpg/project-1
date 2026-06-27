@@ -300,6 +300,8 @@ tbody td.l{text-align:left;}
 .emp-photo{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--gray-200);background:#fff;vertical-align:middle;}
 .emp-photo-none{display:inline-flex;align-items:center;justify-content:center;width:62px;height:62px;font-size:30px;color:#94a3b8;}
 .vac-pill{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:3px 10px;font-size:12px;font-weight:700;}
+.userno-link{font-size:18px;font-weight:800;color:var(--brand-mid);text-decoration:none;}
+.userno-link:hover{text-decoration:underline;}
 @media(max-width:760px){.landing{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -543,7 +545,7 @@ tbody td.l{text-align:left;}
                                 <span class="emp-photo emp-photo-none">&#128100;</span>
                             <?php endif; ?>
                         </td>
-                        <td><b><?php echo ac_h($e['user_no']); ?></b></td>
+                        <td><a class="userno-link" href="employee_overview.php?search=<?php echo urlencode((string)$e['user_no']); ?>&tab=details" title="Open Employee Overview"><?php echo ac_h($e['user_no']); ?></a></td>
                         <td class="l"><?php echo ac_h($e['full_name'] ?? $e['employee_name']); ?></td>
                         <td><?php echo ac_h($room['main_location']); ?></td>
                         <td><?php echo ac_h($room['tower_block']); ?></td>
