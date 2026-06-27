@@ -338,8 +338,28 @@ $todayAbsentPeople = dashboard_people_list($conn, "
     ORDER BY CAST(attendance.user_no AS UNSIGNED), attendance.user_no
 ");
 
-$todayLatePeople = dashboard_people_list($conn, "
-    SELECT attendance.user_no, COALESCE(employees.full_name, attendance.employee_name, '') AS full_name
+/* Late seconds — mirrors calculated_late_seconds() in attendance_report.php:
+   prefer the saved late_time; otherwise derive from check-in after the
+   07:06 grace, measured from the 07:00 office start. */
+$dashboard_late_seconds_expr = "
+    CASE
+        WHEN attendance.late_time IS NOT NULL
+             AND TRIM(attendance.late_time) != ''
+             AND TRIM(attendance.late_time) NOT IN ('00:00','00:00:00')
+             THEN TIME_TO_SEC(attendance.late_time)
+        WHEN attendance.check_in IS NOT NULL
+             AND TRIM(attendance.check_in) != ''
+             AND TIME_TO_SEC(attendance.check_in) > TIME_TO_SEC('07:06:00')
+             THEN TIME_TO_SEC(attendance.check_in) - TIME_TO_SEC('07:00:00')
+        ELSE 0
+    END
+";
+
+$todayLatePeople = [];
+$lateResult = mysqli_query($conn, "
+    SELECT attendance.user_no,
+           COALESCE(employees.full_name, attendance.employee_name, '') AS full_name,
+           ($dashboard_late_seconds_expr) AS late_seconds
     FROM attendance
     LEFT JOIN employees ON TRIM(employees.user_no) = TRIM(attendance.user_no)
     WHERE attendance.attendance_date = '$safe_today'
@@ -352,6 +372,17 @@ $todayLatePeople = dashboard_people_list($conn, "
       )
     ORDER BY CAST(attendance.user_no AS UNSIGNED), attendance.user_no
 ");
+if ($lateResult) {
+    while ($row = mysqli_fetch_assoc($lateResult)) {
+        $lateSeconds = max(0, (int)($row['late_seconds'] ?? 0));
+        $lateMinutes = (int)round($lateSeconds / 60);
+        $todayLatePeople[] = [
+            'user_no'      => $row['user_no'] ?? '',
+            'name'         => $row['full_name'] ?? '',
+            'late_minutes' => $lateMinutes,
+        ];
+    }
+}
 
 $totalToday  = max($todayPresent + $todayAbsent + $todayLate, 1);
 $presentDeg  = round(($todayPresent / $totalToday) * 360, 2);
@@ -924,6 +955,19 @@ body {
 }
 .pie-person:last-child { border-bottom: 0; }
 .pie-person small { color: #64748b; }
+.pie-person-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    text-align: right;
+}
+.pie-person-right .late-mins {
+    color: #c05000;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.pie-person-right small { color: #64748b; }
 
 /* legacy — kept empty intentionally */
 
@@ -1277,9 +1321,27 @@ function showPieDetails(type) {
     list.innerHTML = people.length === 0
         ? '<div class="pie-person">No employee found.</div>'
         : people.map(function(p) {
-            return '<div class="pie-person"><span>' + escapeHtml(p.name || 'No Name') + '</span><small>' + escapeHtml(p.user_no || '') + '</small></div>';
+            var right = escapeHtml(p.user_no || '');
+            if (type === 'late') {
+                var mins = parseInt(p.late_minutes, 10) || 0;
+                var lateTxt = mins > 0 ? formatLate(mins) + ' late' : '—';
+                right = '<span class="late-mins">&#9200; ' + escapeHtml(lateTxt) + '</span>'
+                      + '<small>' + escapeHtml(p.user_no || '') + '</small>';
+                return '<div class="pie-person"><span>' + escapeHtml(p.name || 'No Name') + '</span>'
+                     + '<span class="pie-person-right">' + right + '</span></div>';
+            }
+            return '<div class="pie-person"><span>' + escapeHtml(p.name || 'No Name') + '</span><small>' + right + '</small></div>';
           }).join('');
     box.classList.add('open');
+}
+
+/* Format late minutes into a friendly "Xh Ym" / "Ym" string */
+function formatLate(mins) {
+    mins = parseInt(mins, 10) || 0;
+    if (mins < 60) return mins + ' min';
+    var h = Math.floor(mins / 60);
+    var m = mins % 60;
+    return m > 0 ? (h + 'h ' + m + 'm') : (h + 'h');
 }
 
 /* ════════════════════════════════════════
