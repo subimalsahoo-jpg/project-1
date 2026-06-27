@@ -165,6 +165,7 @@ function permission_definitions() {
         'reports_view' => 'Reports View',
         'uploads_manage' => 'Uploads Manage',
         'complaints_manage' => 'Complaints Manage',
+        'recruitment_manage' => 'Recruitment Manage',
         'user_manage' => 'User Management',
     ];
 }
@@ -182,7 +183,7 @@ function role_permissions($role) {
             'dashboard_view', 'employee_view', 'employee_add',
             'attendance_report', 'vacation_manage', 'reports_view',
             'overtime_view', 'gratuity_view', 'visa_cancellation_manage', 'visa_insurance_view',
-            'leave_encashment_manage', 'accommodation_manage',
+            'leave_encashment_manage', 'accommodation_manage', 'recruitment_manage',
         ],
         'salary' => [
             'dashboard_view', 'employee_view', 'salary_view',
