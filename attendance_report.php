@@ -18,21 +18,66 @@ if ($emp_col_q) {
 }
 $status_col = isset($emp_cols['employee_status']) ? 'employee_status'
             : (isset($emp_cols['status'])         ? 'status' : null);
+
+/* ─────────────────────────────────────────────
+   Who appears in the report?
+
+   Resigned employees — and those still serving their notice period — MUST
+   stay visible so we can see how many days they actually worked. We therefore
+   DO NOT exclude anyone by status. Instead we only cap the visible rows at the
+   employee's effective last working day, which is the LATEST of:
+       • employees.resign_date
+       • visa_cancellations.last_working_date
+       • visa_cancellations.notice_period_end
+   Every attendance row on or before that day is shown (Present when they
+   punched, Absent when they did not). Rows after it are hidden because the
+   person had already left. If no leaving date is on record, all their
+   existing attendance rows are shown.
+───────────────────────────────────────────── */
 $employee_join = "LEFT JOIN employees ON TRIM(employees.user_no) = TRIM(attendance.user_no)";
-$active_cond = "employees.user_no IS NOT NULL";
-if ($status_col) {
-    $active_cond .= " AND (
-        employees.`$status_col` IS NULL
-        OR TRIM(employees.`$status_col`) = ''
-        OR LOWER(TRIM(employees.`$status_col`)) NOT IN ('inactive', 'resign', 'resigned')
-    )";
+
+$vc_has_lwd = false;
+$vc_has_npe = false;
+$vc_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
+if ($vc_check && mysqli_num_rows($vc_check) > 0) {
+    $vc_cols   = [];
+    $vc_col_q  = mysqli_query($conn, "SHOW COLUMNS FROM visa_cancellations");
+    if ($vc_col_q) while ($c = mysqli_fetch_assoc($vc_col_q)) $vc_cols[$c['Field']] = true;
+    $vc_has_lwd = isset($vc_cols['last_working_date']);
+    $vc_has_npe = isset($vc_cols['notice_period_end']);
+    if ($vc_has_lwd || $vc_has_npe) {
+        $vc_selects   = [];
+        $vc_selects[] = $vc_has_lwd
+            ? "MAX(NULLIF(NULLIF(last_working_date,''),'0000-00-00')) AS lwd"
+            : "NULL AS lwd";
+        $vc_selects[] = $vc_has_npe
+            ? "MAX(NULLIF(NULLIF(notice_period_end,''),'0000-00-00')) AS npe"
+            : "NULL AS npe";
+        $employee_join .= "
+            LEFT JOIN (
+                SELECT TRIM(user_no) AS user_no, " . implode(', ', $vc_selects) . "
+                FROM visa_cancellations
+                GROUP BY TRIM(user_no)
+            ) vc ON vc.user_no = TRIM(attendance.user_no)";
+    }
 }
+
+/* Effective last-working-day expressions (each yields a date or NULL). */
+$cutoff_exprs = [];
 if (isset($emp_cols['resign_date'])) {
-    $active_cond .= " AND (
-        employees.resign_date IS NULL
-        OR employees.resign_date = ''
-        OR employees.resign_date >= attendance.attendance_date
-    )";
+    $cutoff_exprs[] = "NULLIF(NULLIF(employees.resign_date,''),'0000-00-00')";
+}
+if ($vc_has_lwd) $cutoff_exprs[] = "vc.lwd";
+if ($vc_has_npe) $cutoff_exprs[] = "vc.npe";
+
+$active_cond = "employees.user_no IS NOT NULL";
+if (!empty($cutoff_exprs)) {
+    // No leaving date on record at all → show every attendance row that exists.
+    $no_cutoff = '(' . implode(' AND ', array_map(fn($e) => "$e IS NULL", $cutoff_exprs)) . ')';
+    // Otherwise keep rows on or before the LATEST known last-working day.
+    // (attendance_date <= A OR attendance_date <= B  ==  attendance_date <= MAX(A,B))
+    $within    = '(' . implode(' OR ', array_map(fn($e) => "attendance.attendance_date <= $e", $cutoff_exprs)) . ')';
+    $active_cond .= " AND ($no_cutoff OR $within)";
 }
 
 $manual_reason_col_q = mysqli_query($conn, "SHOW COLUMNS FROM attendance LIKE 'manual_entry_reason'");
@@ -232,14 +277,32 @@ if ($employee_name_raw !== '' || $user_no_raw !== '') {
             $swu    = mysqli_real_escape_string($conn, $wu);
             $cutoff = $work_to;
 
-            // Resign cutoff — a resigned employee is gone for the rest of the period.
+            // Effective last-working day = the LATEST of resign_date and the
+            // visa-cancellation last_working_date / notice_period_end. A resigned
+            // or notice-period employee is gone AFTER that day, so the working-day
+            // count stops there — but still includes every day up to and
+            // including it.
+            $last_day = '';
             $rq = mysqli_query($conn, "
                 SELECT resign_date FROM employees
-                WHERE user_no='$swu' AND resign_date IS NOT NULL AND resign_date != '' LIMIT 1
+                WHERE user_no='$swu' AND resign_date IS NOT NULL AND resign_date != '' AND resign_date != '0000-00-00' LIMIT 1
             ");
-            if ($rq && ($rr = mysqli_fetch_assoc($rq)) && !empty($rr['resign_date'])
-                && $rr['resign_date'] >= $work_from && $rr['resign_date'] < $cutoff) {
-                $cutoff = $rr['resign_date'];
+            if ($rq && ($rr = mysqli_fetch_assoc($rq)) && !empty($rr['resign_date'])) {
+                $last_day = $rr['resign_date'];
+            }
+            if ($vc_has_lwd || $vc_has_npe) {
+                $vc_sel = [];
+                if ($vc_has_lwd) $vc_sel[] = "MAX(NULLIF(NULLIF(last_working_date,''),'0000-00-00')) AS lwd";
+                if ($vc_has_npe) $vc_sel[] = "MAX(NULLIF(NULLIF(notice_period_end,''),'0000-00-00')) AS npe";
+                $vcq = mysqli_query($conn, "SELECT " . implode(', ', $vc_sel) . " FROM visa_cancellations WHERE TRIM(user_no)='$swu'");
+                if ($vcq && ($vcr = mysqli_fetch_assoc($vcq))) {
+                    foreach (['lwd', 'npe'] as $k) {
+                        if (!empty($vcr[$k]) && $vcr[$k] > $last_day) $last_day = $vcr[$k];
+                    }
+                }
+            }
+            if ($last_day !== '' && $last_day >= $work_from && $last_day < $cutoff) {
+                $cutoff = $last_day;
             }
 
             if ($cutoff < $work_from) continue;
