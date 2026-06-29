@@ -311,7 +311,20 @@ if (!function_exists('vc_fetch_records')) {
         $res = mysqli_query($conn, $sql);
         if ($res) { while ($r = mysqli_fetch_assoc($res)) { $r['_virtual'] = false; $rows[] = $r; } }
         // Surface resigned employees not yet processed, so their file can be closed here.
-        return array_merge($rows, vc_fetch_resigned_virtual($conn, $f));
+        $rows = array_merge($rows, vc_fetch_resigned_virtual($conn, $f));
+
+        // Keep Pending / in-process records on top and push Completed ones to
+        // the bottom, while preserving the existing order within each group.
+        $pending_rows   = [];
+        $completed_rows = [];
+        foreach ($rows as $r) {
+            if (strtolower(trim((string)($r['cancellation_status'] ?? ''))) === 'completed') {
+                $completed_rows[] = $r;
+            } else {
+                $pending_rows[] = $r;
+            }
+        }
+        return array_merge($pending_rows, $completed_rows);
     }
 }
 
