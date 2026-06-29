@@ -23,21 +23,41 @@ $status_col = isset($employee_columns['employee_status'])
     ? 'employee_status'
     : (isset($employee_columns['status']) ? 'status' : null);
 
+/* Resigned employees — and those serving notice — must still appear so their
+   absent days (up to their last working day) are counted. So we DO NOT filter
+   by status; we only cap rows at the effective last-working day, which is the
+   LATEST of resign_date, visa_cancellations.last_working_date and
+   notice_period_end. */
 $active_employee_condition = "e.user_no IS NOT NULL";
-if ($status_col) {
-    $active_employee_condition .= " AND (
-        e.`$status_col` IS NULL
-        OR e.`$status_col` = ''
-        OR LOWER(e.`$status_col`) = 'active'
-    )";
-}
+
+$absent_vc_join = "";
+$cutoff_exprs   = [];
 if (isset($employee_columns['resign_date'])) {
-    $active_employee_condition .= " AND (
-        e.resign_date IS NULL
-        OR e.resign_date = ''
-        OR e.resign_date = '0000-00-00'
-        OR e.resign_date >= a.attendance_date
-    )";
+    $cutoff_exprs[] = "NULLIF(NULLIF(e.resign_date,''),'0000-00-00')";
+}
+$vc_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
+if ($vc_check && mysqli_num_rows($vc_check) > 0) {
+    $vc_cols  = [];
+    $vc_col_q = mysqli_query($conn, "SHOW COLUMNS FROM visa_cancellations");
+    if ($vc_col_q) while ($c = mysqli_fetch_assoc($vc_col_q)) $vc_cols[$c['Field']] = true;
+    $vc_sel = [];
+    if (isset($vc_cols['last_working_date'])) $vc_sel[] = "MAX(NULLIF(NULLIF(last_working_date,''),'0000-00-00')) AS lwd";
+    if (isset($vc_cols['notice_period_end'])) $vc_sel[] = "MAX(NULLIF(NULLIF(notice_period_end,''),'0000-00-00')) AS npe";
+    if (!empty($vc_sel)) {
+        $absent_vc_join = "
+    LEFT JOIN (
+        SELECT TRIM(user_no) AS user_no, " . implode(', ', $vc_sel) . "
+        FROM visa_cancellations
+        GROUP BY TRIM(user_no)
+    ) vc ON vc.user_no = TRIM(a.user_no)";
+        if (isset($vc_cols['last_working_date'])) $cutoff_exprs[] = "vc.lwd";
+        if (isset($vc_cols['notice_period_end'])) $cutoff_exprs[] = "vc.npe";
+    }
+}
+if (!empty($cutoff_exprs)) {
+    $no_cutoff = '(' . implode(' AND ', array_map(fn($e) => "$e IS NULL", $cutoff_exprs)) . ')';
+    $within    = '(' . implode(' OR ', array_map(fn($e) => "a.attendance_date <= $e", $cutoff_exprs)) . ')';
+    $active_employee_condition .= " AND ($no_cutoff OR $within)";
 }
 
 $where_search = "";
@@ -62,7 +82,7 @@ $absent_sql = "
         GROUP_CONCAT(DATE_FORMAT(a.attendance_date, '%d-%m-%Y') ORDER BY a.attendance_date ASC SEPARATOR ', ') AS absent_dates,
         COUNT(*) AS absent_days
     FROM attendance a
-    INNER JOIN employees e ON TRIM(e.user_no) = TRIM(a.user_no)
+    INNER JOIN employees e ON TRIM(e.user_no) = TRIM(a.user_no)$absent_vc_join
     WHERE DATE_FORMAT(a.attendance_date, '%Y-%m') = '$safe_month'
       AND (a.check_in IS NULL OR TRIM(a.check_in) = '')
       AND DAYNAME(a.attendance_date) != 'Sunday'
