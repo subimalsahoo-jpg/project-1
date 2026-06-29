@@ -182,6 +182,22 @@ if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
     $month_start = date('Y-m-01');
     $month_end   = date('Y-m-t');
     $eff_return  = "COALESCE(NULLIF(v.return_date,'0000-00-00'), v.to_date)";
+
+    /* Exclude employees who have left / resigned — they shouldn't show on the
+       "back from vacation" ribbon even if they have no attendance, because
+       they are no longer on duty. Signals: completed visa cancellation,
+       a resigned/inactive employee status, or a set resign date. */
+    $ribbon_exclude = "";
+    if ($vc_exists_dash && mysqli_num_rows($vc_exists_dash) > 0) {
+        $ribbon_exclude .= " AND v.user_no NOT IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed')";
+    }
+    if ($status_col) {
+        $ribbon_exclude .= " AND (e.`$status_col` IS NULL OR e.`$status_col`='' OR LOWER(e.`$status_col`) NOT IN ('inactive','resign','resigned','terminated','left','cancelled','end of contract','endofcontract','absconding'))";
+    }
+    if (isset($employee_columns_dashboard['resign_date'])) {
+        $ribbon_exclude .= " AND (e.resign_date IS NULL OR e.resign_date='' OR e.resign_date='0000-00-00')";
+    }
+
     $vr_q = mysqli_query($conn, "
         SELECT v.user_no,
                COALESCE(e.full_name, v.employee_name, '') AS full_name,
@@ -191,6 +207,7 @@ if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
         LEFT JOIN employees e ON TRIM(e.user_no) = TRIM(v.user_no)
         WHERE $eff_return BETWEEN '$month_start' AND '$month_end'
           AND COALESCE(v.vacation_status,'') NOT IN ('Cancelled','Returned')
+          $ribbon_exclude
           AND NOT EXISTS (
               SELECT 1 FROM attendance a
               WHERE TRIM(a.user_no) = TRIM(v.user_no)
