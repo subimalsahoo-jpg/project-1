@@ -1617,6 +1617,25 @@ textarea { height: 48px; resize: vertical; }
 
 </div>
 
+<?php
+/* After 6pm Duty (separate payment) — shown for reference only; NOT added
+   to the salary figures above. */
+require_once 'after6pm_helper.php';
+$a6 = a6_breakdown($conn, $user_no, $emp_id, $basic_salary, $currentMonth);
+?>
+<div class="section-title">After 6pm Duty (Separate Payment)</div>
+<div class="fin-card" style="margin-bottom:18px;">
+    <div class="fin-card-hd">🌙 After 6pm Duty — <?= strtoupper($showMonth) ?></div>
+    <div class="fin-card-bd">
+        <div class="fin-row"><span class="fin-lbl">After 6pm OT (1.25&times;)</span> <span class="fin-val accent"><?= number_format($a6['after6pm_hours'], 2) ?> hrs &middot; <?= fmt($a6['after6pm_amount']) ?> AED</span></div>
+        <div class="fin-row"><span class="fin-lbl">Sunday OT (1.5&times;)</span> <span class="fin-val accent"><?= number_format($a6['sunday_hours'], 2) ?> hrs &middot; <?= fmt($a6['sunday_amount']) ?> AED</span></div>
+        <div class="fin-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;"><span class="fin-lbl" style="font-weight:700;">Total After 6pm Amount</span> <span class="fin-val green" style="font-weight:800;"><?= fmt($a6['total']) ?> AED</span></div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Paid separately &mdash; <strong>not included</strong> in the salary above.
+            <a href="after6pm_slip.php?user_no=<?= urlencode($user_no) ?>&month=<?= urlencode($currentMonth) ?>&search_btn=1" target="_blank" rel="noopener">Open slip &rarr;</a>
+        </div>
+    </div>
+</div>
+
 <!-- Salary history table -->
 <div class="section-title">Salary History</div>
 
