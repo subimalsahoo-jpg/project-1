@@ -53,6 +53,18 @@ if ($vc_check && mysqli_num_rows($vc_check) > 0) {
         if (isset($vc_cols['last_working_date'])) $cutoff_exprs[] = "vc.lwd";
         if (isset($vc_cols['notice_period_end'])) $cutoff_exprs[] = "vc.npe";
     }
+
+    /* An ABSCONDING employee must NOT affect the absent figures: they simply
+       disappeared, so we stop marking them absent. Everyone else with a blank
+       (not-yet-cancelled) visa is still on duty and keeps counting normally. */
+    if (isset($vc_cols['cancellation_reason'])) {
+        $active_employee_condition .= "
+        AND NOT EXISTS (
+            SELECT 1 FROM visa_cancellations vc_abs
+            WHERE TRIM(vc_abs.user_no) = TRIM(a.user_no)
+              AND LOWER(TRIM(vc_abs.cancellation_reason)) = 'absconding'
+        )";
+    }
 }
 if (!empty($cutoff_exprs)) {
     $no_cutoff = '(' . implode(' AND ', array_map(fn($e) => "$e IS NULL", $cutoff_exprs)) . ')';

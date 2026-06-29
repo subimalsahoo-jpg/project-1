@@ -49,10 +49,13 @@ $status_col = isset($employee_columns_dashboard['employee_status'])
 
 /* "Departed" is decided by VISA CANCELLATION being Completed, NOT by
    resign_date/status. So an employee in notice period (resignation given
-   but cancellation not yet Completed) still counts as an Active employee. */
+   but cancellation not yet Completed) still counts as an Active employee.
+   EXCEPTION: an ABSCONDING employee is excluded immediately (their visa
+   cancel date may still be blank, but they have effectively left and should
+   not affect dashboard figures). */
 $vc_exists_dash = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
 $not_cancelled  = ($vc_exists_dash && mysqli_num_rows($vc_exists_dash) > 0)
-    ? " AND user_no NOT IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed')"
+    ? " AND user_no NOT IN (SELECT user_no FROM visa_cancellations WHERE cancellation_status='Completed' OR LOWER(TRIM(cancellation_reason))='absconding')"
     : "";
 
 $total_employee_condition = "1=1" . $not_cancelled;
