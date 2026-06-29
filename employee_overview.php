@@ -1634,11 +1634,18 @@ textarea { height: 48px; resize: vertical; }
 
 <?php
 /* After 6pm Duty (separate payment) — shown for reference only; NOT added
-   to the salary figures above. */
+   to the salary figures above. Fixed-salary employees get no OT at all. */
 require_once 'after6pm_helper.php';
-$a6 = a6_breakdown($conn, $user_no, $emp_id, $basic_salary, $currentMonth);
+$a6_fixed = (float)($employee['fixed_salary'] ?? 0) > 0;
 ?>
 <div class="section-title">After 6pm Duty (Separate Payment)</div>
+<?php if ($a6_fixed): ?>
+<div class="fin-card" style="max-width:360px;margin-bottom:18px;">
+    <div class="fin-card-bd" style="color:var(--text-dim);">
+        🌙 Fixed-salary employee &mdash; no After 6pm / OT applicable.
+    </div>
+</div>
+<?php else: $a6 = a6_breakdown($conn, $user_no, $emp_id, $basic_salary, $currentMonth); ?>
 <div class="fin-card" style="max-width:360px;margin-bottom:18px;">
     <div class="fin-card-hd">🌙 After 6pm Duty — <?= strtoupper($showMonth) ?></div>
     <div class="fin-card-bd">
@@ -1648,6 +1655,7 @@ $a6 = a6_breakdown($conn, $user_no, $emp_id, $basic_salary, $currentMonth);
         <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Not included in salary above. <a href="after6pm_slip.php?user_no=<?= urlencode($user_no) ?>&month=<?= urlencode($currentMonth) ?>&search_btn=1" target="_blank" rel="noopener">Open slip &rarr;</a></div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Salary history table -->
 <div class="section-title">Salary History</div>

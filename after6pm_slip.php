@@ -12,7 +12,7 @@ $auto_print  = isset($_GET['print']);
 $employees = [];
 if ($view && $search !== '') {
     $s = a6_esc($conn, $search);
-    $q = mysqli_query($conn, "SELECT user_no, employee_id, full_name, designation, basic_salary
+    $q = mysqli_query($conn, "SELECT user_no, employee_id, full_name, designation, basic_salary, fixed_salary
         FROM employees
         WHERE user_no='$s' OR employee_id='$s' OR full_name LIKE '%$s%'
         ORDER BY CAST(user_no AS UNSIGNED), user_no");
@@ -86,6 +86,7 @@ input{padding:9px;margin:4px;border:1px solid #cbd5e1;border-radius:5px;}
 <?php if (!empty($employees)): ?>
 <div class="print-wrapper">
     <?php foreach ($employees as $emp):
+        if ((float)($emp['fixed_salary'] ?? 0) > 0) continue; // Fixed salary = no OT
         $b = a6_breakdown($conn, $emp['user_no'], $emp['employee_id'] ?? '', (float)($emp['basic_salary'] ?? 0), $month);
         if ($b['after6pm_hours'] <= 0 && $b['sunday_hours'] <= 0) continue;
     ?>
