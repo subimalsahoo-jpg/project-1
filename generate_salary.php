@@ -612,7 +612,7 @@ if ($is_generate_request && $employees_q) {
             $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
             $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot;
             $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
-            $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
+            $ot_amount = $regular_ot_amount; // Main sheet OT = regular 2hr OT only. After-6pm & Sunday OT are paid on the separate "After 6pm Duty Hours" sheet.
             $salary_earned_for_generate = $month_days > 0 ? ($basic_salary / $month_days) * $working_days_for_generate : 0;
             $allowance_earned_for_generate = $month_days > 0 ? ($allowance / $month_days) * $working_days_for_generate : 0;
             $total_salary_for_generate = max(0, $salary_earned_for_generate + $allowance_earned_for_generate + $att_allowance + $ot_amount - $late_amount);
@@ -1291,7 +1291,7 @@ table.salary-table tbody tr td { position: static !important; }
 <thead>
     <!-- Row 1: Company name -->
     <tr>
-        <th colspan="32" style="font-size:16px; font-weight:800; letter-spacing:0.06em; background:var(--brand); padding:10px;">
+        <th colspan="28" style="font-size:16px; font-weight:800; letter-spacing:0.06em; background:var(--brand); padding:10px;">
             EURO TROUSERS MFG CO (FZC) &mdash; SALARY SHEET FOR <?php echo strtoupper($month_title); ?>
         </th>
     </tr>
@@ -1301,7 +1301,7 @@ table.salary-table tbody tr td { position: static !important; }
         <th colspan="2"  class="grp-base">Base Pay</th>
         <th colspan="3"  class="grp-days">Attendance</th>
         <th colspan="2"  class="grp-earnings">Earned</th>
-        <th colspan="7"  class="grp-ot">Overtime</th>
+        <th colspan="3"  class="grp-ot">Overtime</th>
         <th colspan="2"  class="grp-deduction">Late Ded.</th>
         <th colspan="1"  class="grp-allowance">Att Allow.</th>
         <th colspan="1"  class="grp-earnings">Total Sal.</th>
@@ -1326,10 +1326,6 @@ table.salary-table tbody tr td { position: static !important; }
         <th class="col-amount">Allow. Earned</th>
         <th class="col-ot">Reg OT hrs</th>
         <th class="col-amount">Reg OT Amt</th>
-        <th class="col-ot">After 6pm hrs</th>
-        <th class="col-amount">After 6pm Amt</th>
-        <th class="col-ot">Sunday OT hrs</th>
-        <th class="col-amount">Sunday OT Amt</th>
         <th class="col-amount">OT Total</th>
         <th class="col-ot">Total Late</th>
         <th class="col-amount">Late Amount</th>
@@ -1503,7 +1499,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
         $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot_hours;
         $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
-        $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
+        $ot_amount = $regular_ot_amount; // Main sheet OT = regular 2hr OT only. After-6pm & Sunday OT are paid on the separate "After 6pm Duty Hours" sheet.
         $total_late_hours = $calculated_late_hours;
         $late_amount = $calculated_late_amount;
         $total_salary = max(0, $salary_earned + $allowance_earned + $ot_amount + $att_allowance - $late_amount);
@@ -1521,7 +1517,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
         $regular_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $regular_ot_hours;
         $after6pm_ot_amount = ($basic_salary / 30 / 8) * 1.25 * $ot_hours;
         $extra_ot_amount = ($basic_salary / 30 / 8) * 1.5 * $extra_ot_hours;
-        $ot_amount = $regular_ot_amount + $after6pm_ot_amount + $extra_ot_amount;
+        $ot_amount = $regular_ot_amount; // Main sheet OT = regular 2hr OT only. After-6pm & Sunday OT are paid on the separate "After 6pm Duty Hours" sheet.
         // Total salary is computed from the components shown in this row, so it
         // always matches them. (Previously a saved total had the removed
         // attendance-allowance / late subtracted again, double-counting the
@@ -1619,11 +1615,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
     <td><?php echo money($allowance_earned); ?></td>
     <td><?php echo money($regular_ot_hours); ?></td>
     <td><?php echo money($regular_ot_amount); ?></td>
-    <td class="<?php echo $ot_hours_class; ?>"><?php echo money($ot_hours); ?></td>
-    <td><?php echo money($after6pm_ot_amount); ?></td>
-    <td class="<?php echo $ot_amount_class; ?>"><?php echo number_format((float)$extra_ot_hours, 2); ?></td>
-    <td class="<?php echo $ot_amount_class; ?>"><?php echo money($extra_ot_amount); ?></td>
-    <td class="<?php echo $ot_amount_class; ?>"><?php echo money($ot_amount); ?></td>
+    <td><?php echo money($ot_amount); ?></td>
     <td><?php echo hours_minutes($total_late_hours); ?></td>
     <td style="color:#d35400;font-weight:700;"><?php echo $late_amount > 0 ? '-' . money($late_amount) : money(0); ?></td>
     <td><?php echo money($att_allowance); ?></td>
@@ -1652,7 +1644,7 @@ while ($emp = mysqli_fetch_assoc($result)) {
 </tbody>
 <tfoot>
 <tr class="total-row">
-    <td colspan="29" style="text-align:right; font-size:14px; padding-right:16px; font-weight:700;">TOTAL NET PAYABLE (AED)</td>
+    <td colspan="25" style="text-align:right; font-size:14px; padding-right:16px; font-weight:700;">TOTAL NET PAYABLE (AED)</td>
     <td class="td-net-total"><?php echo money($total_net_salary); ?></td>
     <td colspan="2"></td>
 </tr>
