@@ -33,13 +33,15 @@ if ($search_user !== '') {
     $where = "(user_no='$s' OR employee_id='$s' OR full_name LIKE '%$s%')";
 }
 $emps = [];
-$eq = mysqli_query($conn, "SELECT user_no, employee_id, full_name, basic_salary FROM employees WHERE $where ORDER BY CAST(user_no AS UNSIGNED) ASC, user_no ASC");
+$eq = mysqli_query($conn, "SELECT user_no, employee_id, full_name, basic_salary, fixed_salary FROM employees WHERE $where ORDER BY CAST(user_no AS UNSIGNED) ASC, user_no ASC");
 if ($eq) { while ($r = mysqli_fetch_assoc($eq)) { $emps[] = $r; } }
 
 /* Compute rows. */
 $rows = [];
 $tot_after6pm_hrs = 0; $tot_after6pm_amt = 0; $tot_sun_hrs = 0; $tot_sun_amt = 0; $tot_amt = 0;
 foreach ($emps as $emp) {
+    // Fixed-salary employees (e.g. drivers/managers) get NO OT at all.
+    if ((float)($emp['fixed_salary'] ?? 0) > 0) continue;
     $uno = $emp['user_no'];
     $eid = $emp['employee_id'] ?? '';
     $basic = (float)($emp['basic_salary'] ?? 0);
