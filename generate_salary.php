@@ -1279,10 +1279,6 @@ table.salary-table tbody tr td { position: static !important; }
 <div class="actions-bar" id="actionsTop">
     <label><input type="checkbox" id="selectAllTop"> Select All</label>
     <button type="submit" name="generate"   value="1" class="btn btn-warning selected-generate-btn">&#9654; Generate Salary Sheet</button>
-    <button type="submit" name="sunday_ot"  value="1" class="btn btn-sunday  selected-generate-btn">&#9788; Sunday Generate</button>
-    <?php if ($use_sunday_ot) { ?>
-        <span class="mode-badge">Sunday OT Mode Active</span>
-    <?php } ?>
 </div>
 
 <!-- Table -->
@@ -1656,10 +1652,6 @@ while ($emp = mysqli_fetch_assoc($result)) {
 <div class="actions-bar" style="border-top:2px solid rgba(255,255,255,0.15); flex-shrink:0;">
     <label><input type="checkbox" id="selectAllBottom"> Select All</label>
     <button type="submit" name="generate"  value="1" class="btn btn-warning selected-generate-btn">&#9654; Generate Salary Sheet</button>
-    <button type="submit" name="sunday_ot" value="1" class="btn btn-sunday  selected-generate-btn">&#9788; Sunday Generate</button>
-    <?php if ($use_sunday_ot) { ?>
-        <span class="mode-badge">Sunday OT Mode Active</span>
-    <?php } ?>
 </div>
 </form>
 

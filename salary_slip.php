@@ -299,7 +299,9 @@ function renderPayslip($conn, $employee, $month, $month_title){
     $regular_ot_hours = (float)($employee['regular_ot_hours'] ?? 0);
     $after6pm_hours = (float)($employee['ot'] ?? 0);
     $extra_ot_hours = (float)($employee['extra_ot_hours'] ?? 0);
-    $ot_hours = $regular_ot_hours + $after6pm_hours + $extra_ot_hours;
+    // Main salary slip shows ONLY the main-sheet OT (regular 2hr OT). After-6pm
+    // & Sunday OT are paid on the separate After 6pm slip.
+    $ot_hours = $regular_ot_hours;
 
     $food_allowance_company = (float)($employee['food_allowance_company'] ?? 0);
     $food_allowance_won = (float)($employee['food_allowance_won'] ?? 0);
@@ -404,7 +406,9 @@ function renderPayslip($conn, $employee, $month, $month_title){
     $allowance_earned = isset($employee['allowance_earned']) && $employee['allowance_earned'] !== ''
         ? (float)$employee['allowance_earned']
         : (($allowance / $month_total_days) * $present_days);
-    $ot_amount = (float)($employee['ot_amount'] ?? 0);
+    $ot_amount = isset($employee['regular_ot_amount']) && $employee['regular_ot_amount'] !== ''
+        ? (float)$employee['regular_ot_amount']
+        : (float)($employee['ot_amount'] ?? 0);
 
     $total_earnings = $basic_salary + $allowance + $good_att_allowance + $ot_amount + $food_allowance;
     $after_deduction_earnings = isset($employee['gross_total']) && $employee['gross_total'] !== ''
