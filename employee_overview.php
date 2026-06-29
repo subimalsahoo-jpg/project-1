@@ -2,6 +2,7 @@
 include 'auth.php';
 include_once 'advance_helper.php';
 require_once 'accommodation_helper.php';
+require_once 'department_helper.php';
 requirePermission('employee_view');
 payroll_ensure_advance_schema($conn);
 acc_ensure_schema($conn);
@@ -1145,12 +1146,7 @@ textarea { height: 48px; resize: vertical; }
                 <select name="department">
                     <option value="">Select Department</option>
                     <?php
-                    $departments = [
-                        'CUTTING DEPT','FABRIC STORE','FACTORY','FINISHING DEPT',
-                        'HOUSE KEEPING','MAINTENANCE - GENERAL','MAINTENANCE - SEWING',
-                        'OFFICE STAFF','PACKING DEPT','PRESSING DEPT','PRINTING DEPT',
-                        'SAMPLE DEPT','SECURITY','SEWING DEPT','STORE'
-                    ];
+                    $departments = dept_get_departments($conn);
                     foreach ($departments as $dept):
                         $selected = val($employee, 'department') === $dept ? 'selected' : '';
                     ?>
@@ -1164,15 +1160,7 @@ textarea { height: 48px; resize: vertical; }
                 <select name="designation">
                     <option value="">Select Designation</option>
                     <?php
-                    $designations = [
-                        'ADMIN','DIRECTOR','ASST.QC','CHECKER','CLEANER','CUTTER',
-                        'DESIGNER','ELECTRICIAN','FABRIC ASSISTANT',
-                        'FINANCE & ACCOUNT DEPT','HELPER','IT','MECHANIC',
-                        'MERCHANDISER','MO','OFFICE BOY','OFFICE STAFF',
-                        'PATTER MASTER','PRESSMAN','PRINTING','PRO','QC',
-                        'QUALITY CHECKER','SAMPLE MAKER','SECURITY',
-                        'STORE KEEPERS','SUPERVISOR','TRIMMER'
-                    ];
+                    $designations = dept_get_designations($conn);
                     foreach ($designations as $designation):
                         $selected = val($employee, 'designation') === $designation ? 'selected' : '';
                     ?>
