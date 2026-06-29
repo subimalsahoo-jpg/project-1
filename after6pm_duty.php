@@ -1,81 +1,32 @@
 <?php
 include 'auth.php';
 requireAnyPermission(['salary_view', 'reports_view', 'overtime_view']);
+require_once 'after6pm_helper.php';
+
+if (isset($_GET['generate']) && !hasPermission('salary_generate')) {
+    requirePermission('salary_generate');
+}
+
+a6_ensure_table($conn);
 
 /* ─────────────────────────────────────────────
-   "After 6pm Duty Hours" report — the second part of the two-part salary.
-   Shows, per employee, the After-6pm OT and Sunday OT hours + amounts using
-   the SAME calculation as the salary sheet. No deductions — OT only.
+   "After 6pm Duty Hours" — the second part of the two-part salary.
+   After-6pm OT (1.25x) + Sunday OT (1.5x). Same calc as the salary sheet.
+   No deductions. Can be Generated (saved) like the salary sheet, and has
+   its own separate salary slip.
 ───────────────────────────────────────────── */
 
 $month       = normalize_input_month($_GET['month'] ?? date('Y-m'), date('Y-m'));
 $month_title = date('F Y', strtotime($month . '-01'));
 $search_user = trim($_GET['user_no'] ?? '');
 $is_excel    = isset($_GET['export']) && $_GET['export'] === 'excel';
-
-function a6_esc($conn, $v) { return mysqli_real_escape_string($conn, (string)$v); }
-function a6_money($a) { return number_format((float)$a, 0); }
-function a6_month_range($month) {
-    return [date('Y-m-01', strtotime($month . '-01')), date('Y-m-t', strtotime($month . '-01'))];
-}
-function a6_time_to_seconds($value) {
-    $value = trim((string)$value);
-    if ($value === '' || $value === '00:00:00') return 0;
-    if (!preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $value, $m)) return 0;
-    return ((int)$m[1] * 3600) + ((int)$m[2] * 60) + (isset($m[3]) ? (int)$m[3] : 0);
-}
-
-/* After-6pm OT from attendance (matches monthly_ot_hours in generate_salary.php) */
-function a6_attendance_ot($conn, $user_no, $employee_id, $month) {
-    [$ms, $me] = a6_month_range($month);
-    $u = a6_esc($conn, $user_no); $e = a6_esc($conn, $employee_id);
-    $cond = "user_no='$u'";
-    if ($employee_id !== '') $cond = "(user_no='$u' OR employee_id='$e')";
-    $res = mysqli_query($conn, "SELECT attendance_date, check_out FROM attendance
-        WHERE $cond AND attendance_date BETWEEN '" . a6_esc($conn, $ms) . "' AND '" . a6_esc($conn, $me) . "'
-        AND check_in IS NOT NULL AND TRIM(check_in)!='' AND check_out IS NOT NULL AND TRIM(check_out)!=''");
-    $hours = 0;
-    $normal_base = a6_time_to_seconds('18:20:00');
-    $friday_base = a6_time_to_seconds('18:45:00');
-    $grace = 120;
-    if ($res) {
-        while ($row = mysqli_fetch_assoc($res)) {
-            $date = $row['attendance_date'] ?? '';
-            if ($date === '') continue;
-            $day = date('l', strtotime($date));
-            if ($day === 'Sunday') continue;
-            $out = a6_time_to_seconds($row['check_out'] ?? '');
-            if ($day === 'Friday') {
-                if ($out >= (a6_time_to_seconds('19:45:00') - $grace)) $hours += floor((($out + $grace) - $friday_base) / 3600);
-            } elseif ($out >= (a6_time_to_seconds('19:20:00') - $grace)) {
-                $hours += floor((($out + $grace) - $normal_base) / 3600);
-            }
-        }
-    }
-    return (float)$hours;
-}
-
-/* Uploaded OT (overtime_records) split into total + Sunday */
-function a6_uploaded_ot($conn, $user_no, $employee_id, $month, $sunday_only = false) {
-    $t = mysqli_query($conn, "SHOW TABLES LIKE 'overtime_records'");
-    if (!$t || mysqli_num_rows($t) == 0) return 0;
-    [$ms, $me] = a6_month_range($month);
-    $u = a6_esc($conn, $user_no); $e = a6_esc($conn, $employee_id);
-    $cond = "user_no='$u'";
-    $ec = mysqli_query($conn, "SHOW COLUMNS FROM overtime_records LIKE 'employee_id'");
-    if ($ec && mysqli_num_rows($ec) > 0 && $employee_id !== '') $cond = "(user_no='$u' OR employee_id='$e')";
-    $sun = $sunday_only ? " AND DAYNAME(attendance_date)='Sunday'" : "";
-    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(ot_hours),0) AS total FROM overtime_records
-        WHERE $cond AND attendance_date BETWEEN '" . a6_esc($conn, $ms) . "' AND '" . a6_esc($conn, $me) . "'$sun"));
-    return (float)($row['total'] ?? 0);
-}
+$do_generate = isset($_GET['generate']);
+$selected    = $_GET['selected_users'] ?? [];
+if (!is_array($selected)) $selected = [$selected];
+$selected    = array_values(array_filter(array_map('trim', $selected), fn($v) => $v !== ''));
+$created_by  = trim((string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? $_SESSION['role'] ?? 'User'));
 
 /* Build the employee list. */
-$emp_cols = [];
-$cq = mysqli_query($conn, "SHOW COLUMNS FROM employees");
-if ($cq) { while ($c = mysqli_fetch_assoc($cq)) { $emp_cols[$c['Field']] = true; } }
-$status_col = isset($emp_cols['employee_status']) ? 'employee_status' : (isset($emp_cols['status']) ? 'status' : null);
-
 $where = "1=1";
 if ($search_user !== '') {
     $s = a6_esc($conn, $search_user);
@@ -93,26 +44,36 @@ foreach ($emps as $emp) {
     $eid = $emp['employee_id'] ?? '';
     $basic = (float)($emp['basic_salary'] ?? 0);
 
-    $att_after6pm   = a6_attendance_ot($conn, $uno, $eid, $month);
-    $uploaded_total = a6_uploaded_ot($conn, $uno, $eid, $month, false);
-    $sunday_hrs     = a6_uploaded_ot($conn, $uno, $eid, $month, true);
-    $nonsun_upload  = max(0, $uploaded_total - $sunday_hrs);
-    $after6pm_hrs   = $att_after6pm + $nonsun_upload;
+    $b = a6_breakdown($conn, $uno, $eid, $basic, $month);
+    if ($b['after6pm_hours'] <= 0 && $b['sunday_hours'] <= 0) continue; // OT-only sheet
 
-    if ($after6pm_hrs <= 0 && $sunday_hrs <= 0) continue; // OT-only sheet
-
-    $rate = $basic / 30 / 8;
-    $after6pm_amt = $rate * 1.25 * $after6pm_hrs;
-    $sunday_amt   = $rate * 1.5 * $sunday_hrs;
-    $row_total    = $after6pm_amt + $sunday_amt;
+    /* Generate (save) for selected (or all listed if none selected). */
+    $is_generated = false;
+    if ($do_generate && (empty($selected) || in_array((string)$uno, $selected, true))) {
+        $su = a6_esc($conn, $uno); $se = a6_esc($conn, $eid); $sm = a6_esc($conn, $month);
+        $cb = a6_esc($conn, $created_by);
+        mysqli_query($conn, "INSERT INTO after6pm_salary_records
+            (user_no, employee_id, salary_month, basic_salary, after6pm_hours, after6pm_amount, sunday_hours, sunday_amount, total_amount, status, created_by)
+            VALUES ('$su','$se','$sm'," . (float)$basic . "," . (float)$b['after6pm_hours'] . "," . (float)$b['after6pm_amount'] . "," . (float)$b['sunday_hours'] . "," . (float)$b['sunday_amount'] . "," . (float)$b['total'] . ",'Generated','$cb')
+            ON DUPLICATE KEY UPDATE
+                employee_id=VALUES(employee_id), basic_salary=VALUES(basic_salary),
+                after6pm_hours=VALUES(after6pm_hours), after6pm_amount=VALUES(after6pm_amount),
+                sunday_hours=VALUES(sunday_hours), sunday_amount=VALUES(sunday_amount),
+                total_amount=VALUES(total_amount), status='Generated', created_by=VALUES(created_by)");
+        $is_generated = true;
+    } else {
+        $rec = a6_get_record($conn, $uno, $month);
+        $is_generated = $rec && strtolower((string)($rec['status'] ?? '')) === 'generated';
+    }
 
     $rows[] = [
         'user_no' => $uno, 'name' => $emp['full_name'] ?? '', 'basic' => $basic,
-        'after6pm_hrs' => $after6pm_hrs, 'after6pm_amt' => $after6pm_amt,
-        'sunday_hrs' => $sunday_hrs, 'sunday_amt' => $sunday_amt, 'total' => $row_total,
+        'after6pm_hrs' => $b['after6pm_hours'], 'after6pm_amt' => $b['after6pm_amount'],
+        'sunday_hrs' => $b['sunday_hours'], 'sunday_amt' => $b['sunday_amount'], 'total' => $b['total'],
+        'generated' => $is_generated,
     ];
-    $tot_after6pm_hrs += $after6pm_hrs; $tot_after6pm_amt += $after6pm_amt;
-    $tot_sun_hrs += $sunday_hrs; $tot_sun_amt += $sunday_amt; $tot_amt += $row_total;
+    $tot_after6pm_hrs += $b['after6pm_hours']; $tot_after6pm_amt += $b['after6pm_amount'];
+    $tot_sun_hrs += $b['sunday_hours']; $tot_sun_amt += $b['sunday_amount']; $tot_amt += $b['total'];
 }
 
 if ($is_excel) {
@@ -139,9 +100,11 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .btn-back{background:rgba(255,255,255,.15);color:#fff;}
 .btn-primary{background:var(--brand-mid);color:#fff;}
 .btn-success{background:var(--green);color:#fff;}
+.btn-warning{background:var(--accent);color:#1a1a1a;}
 .btn-gray{background:var(--gray-200);color:var(--gray-800);}
 .btn-outline{background:#fff;color:var(--brand);}
-.page{max-width:1100px;margin:20px auto;padding:0 16px;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.page{max-width:1150px;margin:20px auto;padding:0 16px;}
 .page-title{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:700;color:var(--brand);margin-bottom:6px;}
 .subtitle{color:var(--gray-600);margin-bottom:16px;font-size:13px;}
 .filter{background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:14px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -150,14 +113,19 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:va
 .card{background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:14px 18px;}
 .card .l{color:var(--gray-600);font-size:12.5px;font-weight:600;}
 .card .v{font-size:22px;font-weight:800;color:var(--accent);margin-top:4px;}
-.table-wrap{background:#fff;border:1px solid var(--gray-200);border-radius:8px;overflow:auto;}
+.actions-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--brand);padding:10px 14px;border-radius:8px 8px 0 0;color:#fff;}
+.actions-bar label{font-size:13px;}
+.table-wrap{background:#fff;border:1px solid var(--gray-200);border-radius:0 0 8px 8px;overflow:auto;}
 table{width:100%;border-collapse:collapse;}
 th,td{padding:10px;border-bottom:1px solid var(--gray-200);text-align:center;font-size:13px;}
-thead th{background:var(--brand);color:#fff;position:sticky;top:0;}
+thead th{background:var(--brand-mid);color:#fff;position:sticky;top:0;}
 td.l,th.l{text-align:left;}
 tfoot td{font-weight:800;background:#f8fafc;}
 .sun{background:var(--sunday);}
-@media print{.topbar .btn,.filter{display:none!important;}body{background:#fff;}}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+.badge-gen{background:#dcfce7;color:#166534;}
+.badge-not{background:#e2e8f0;color:#475569;}
+@media print{.topbar .btn,.filter,.actions-bar,.col-act,.col-sel{display:none!important;}body{background:#fff;}}
 </style>
 </head>
 <body>
@@ -190,10 +158,19 @@ tfoot td{font-weight:800;background:#f8fafc;}
         <div class="card"><div class="l">Total Amount (AED)</div><div class="v"><?php echo a6_money($tot_amt); ?></div></div>
     </div>
 
+    <form method="GET">
+    <input type="hidden" name="month" value="<?php echo htmlspecialchars($month); ?>">
+    <input type="hidden" name="user_no" value="<?php echo htmlspecialchars($search_user); ?>">
+    <div class="actions-bar">
+        <label><input type="checkbox" id="selectAll"> Select All</label>
+        <button type="submit" name="generate" value="1" class="btn btn-warning btn-sm">&#9654; Generate OT Salary</button>
+        <span style="font-size:12px;opacity:.85;">(Generates &amp; saves the after-6pm / Sunday OT for the selected employees. If none selected, all listed are generated.)</span>
+    </div>
     <div class="table-wrap">
     <table>
         <thead>
             <tr>
+                <th class="col-sel" style="width:34px;">&#9745;</th>
                 <th>SL</th>
                 <th>User No</th>
                 <th class="l">Employee Name</th>
@@ -203,13 +180,16 @@ tfoot td{font-weight:800;background:#f8fafc;}
                 <th>Sunday OT hrs</th>
                 <th>Sunday OT Amt</th>
                 <th>Total Amount</th>
+                <th>Status</th>
+                <th class="col-act">Slip</th>
             </tr>
         </thead>
         <tbody>
         <?php if (empty($rows)): ?>
-            <tr><td colspan="9" style="color:#94a3b8;padding:24px;">No after-6pm or Sunday duty hours found for this month.</td></tr>
+            <tr><td colspan="12" style="color:#94a3b8;padding:24px;">No after-6pm or Sunday duty hours found for this month.</td></tr>
         <?php else: $sl = 1; foreach ($rows as $r): ?>
             <tr>
+                <td class="col-sel"><input type="checkbox" class="emp-check" name="selected_users[]" value="<?php echo htmlspecialchars($r['user_no']); ?>"></td>
                 <td><?php echo $sl++; ?></td>
                 <td><strong><?php echo htmlspecialchars($r['user_no']); ?></strong></td>
                 <td class="l"><?php echo htmlspecialchars($r['name']); ?></td>
@@ -219,21 +199,31 @@ tfoot td{font-weight:800;background:#f8fafc;}
                 <td class="<?php echo $r['sunday_hrs'] > 0 ? 'sun' : ''; ?>"><?php echo number_format($r['sunday_hrs'], 2); ?></td>
                 <td class="<?php echo $r['sunday_hrs'] > 0 ? 'sun' : ''; ?>"><?php echo a6_money($r['sunday_amt']); ?></td>
                 <td><strong><?php echo a6_money($r['total']); ?></strong></td>
+                <td><?php echo $r['generated'] ? '<span class="badge badge-gen">&#10003; Generated</span>' : '<span class="badge badge-not">Not Generated</span>'; ?></td>
+                <td class="col-act"><a class="btn btn-primary btn-sm" href="after6pm_slip.php?user_no=<?php echo urlencode($r['user_no']); ?>&month=<?php echo urlencode($month); ?>&search_btn=1" target="_blank" rel="noopener">&#129534; Slip</a></td>
             </tr>
         <?php endforeach; endif; ?>
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="4" style="text-align:right;">TOTAL</td>
+                <td colspan="5" style="text-align:right;">TOTAL</td>
                 <td><?php echo number_format($tot_after6pm_hrs, 2); ?></td>
                 <td><?php echo a6_money($tot_after6pm_amt); ?></td>
                 <td><?php echo number_format($tot_sun_hrs, 2); ?></td>
                 <td><?php echo a6_money($tot_sun_amt); ?></td>
                 <td><?php echo a6_money($tot_amt); ?></td>
+                <td colspan="2"></td>
             </tr>
         </tfoot>
     </table>
     </div>
+    </form>
 </div>
+
+<script>
+document.getElementById('selectAll').addEventListener('change', function(){
+    document.querySelectorAll('.emp-check').forEach(function(c){ c.checked = this.checked; }, this);
+});
+</script>
 </body>
 </html>

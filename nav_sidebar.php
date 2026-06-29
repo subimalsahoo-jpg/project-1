@@ -125,6 +125,9 @@ body { padding-left: 250px; }
         <a href="generate_salary.php" class="<?php echo appnav_active('generate_salary.php'); ?>">&#128181; Salary Sheet</a>
         <a href="after6pm_duty.php" class="<?php echo appnav_active('after6pm_duty.php'); ?>">&#127769; After 6pm Duty Hours</a>
         <?php endif; ?>
+        <?php if (hasPermission('salary_slip_print')): ?>
+        <a href="after6pm_slip.php" class="<?php echo appnav_active('after6pm_slip.php'); ?>">&#129534; After 6pm Slip</a>
+        <?php endif; ?>
         <?php if (hasPermission('salary_generate') || hasPermission('advance_manage')): ?>
         <a href="advance_manage.php" class="<?php echo appnav_active('advance_manage.php'); ?>">&#128184; Advance Salary</a>
         <?php endif; ?>
