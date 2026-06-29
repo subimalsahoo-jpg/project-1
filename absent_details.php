@@ -54,15 +54,25 @@ if ($vc_check && mysqli_num_rows($vc_check) > 0) {
         if (isset($vc_cols['notice_period_end'])) $cutoff_exprs[] = "vc.npe";
     }
 
-    /* An ABSCONDING employee must NOT affect the absent figures: they simply
-       disappeared, so we stop marking them absent. Everyone else with a blank
-       (not-yet-cancelled) visa is still on duty and keeps counting normally. */
+    /* Exit signals — an employee is dropped from the absent figures once they
+       have effectively left. Either:
+         • the visa has been cancelled (Cancel Date is filled), or
+         • the cancellation reason is Absconding.
+       Anyone with a blank (not-yet-cancelled) visa is still on duty and keeps
+       counting normally (absent shows as absent). */
+    $exit_conds = [];
     if (isset($vc_cols['cancellation_reason'])) {
+        $exit_conds[] = "LOWER(TRIM(vc_x.cancellation_reason)) = 'absconding'";
+    }
+    if (isset($vc_cols['visa_cancellation_date'])) {
+        $exit_conds[] = "(vc_x.visa_cancellation_date IS NOT NULL AND TRIM(vc_x.visa_cancellation_date) != '' AND vc_x.visa_cancellation_date != '0000-00-00')";
+    }
+    if (!empty($exit_conds)) {
         $active_employee_condition .= "
         AND NOT EXISTS (
-            SELECT 1 FROM visa_cancellations vc_abs
-            WHERE TRIM(vc_abs.user_no) = TRIM(a.user_no)
-              AND LOWER(TRIM(vc_abs.cancellation_reason)) = 'absconding'
+            SELECT 1 FROM visa_cancellations vc_x
+            WHERE TRIM(vc_x.user_no) = TRIM(a.user_no)
+              AND (" . implode(' OR ', $exit_conds) . ")
         )";
     }
 }
