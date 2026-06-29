@@ -197,6 +197,10 @@ body { padding-left: 250px; }
     </div>
     <?php endif; ?>
 
+    <?php if (is_admin_user()): ?>
+    <a href="manage_departments.php" class="appnav-title <?php echo appnav_active('manage_departments.php'); ?>">&#127970; Departments &amp; Positions</a>
+    <?php endif; ?>
+
     <?php if (hasPermission('user_manage')): ?>
     <a href="manage_users.php" class="appnav-title <?php echo appnav_active('manage_users.php'); ?>">&#9881; User Management</a>
     <?php endif; ?>

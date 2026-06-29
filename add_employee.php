@@ -1,5 +1,6 @@
 <?php
 include 'auth.php';
+require_once 'department_helper.php';
 requirePermission('employee_add');
 
 $message = "";
@@ -918,12 +919,7 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
             <select name="department">
                 <option value="">Select Department</option>
                 <?php
-                $departments = [
-                    'CUTTING DEPT','FABRIC STORE','FACTORY','FINISHING DEPT',
-                    'HOUSE KEEPING','MAINTENANCE - GENERAL','MAINTENANCE - SEWING',
-                    'OFFICE STAFF','PACKING DEPT','PRESSING DEPT','PRINTING DEPT',
-                    'SAMPLE DEPT','SECURITY','SEWING DEPT','STORE'
-                ];
+                $departments = dept_get_departments($conn);
                 foreach ($departments as $dept) {
                     $sel = (val($search_employee, 'department') === $dept) ? 'selected' : '';
                     echo '<option value="' . htmlspecialchars($dept) . '" ' . $sel . '>' . htmlspecialchars($dept) . '</option>';
@@ -963,15 +959,7 @@ input[readonly] { background: #e9ecef; color: #64748b; cursor: not-allowed; }
             <select name="designation">
                 <option value="">Select Designation</option>
                 <?php
-                $designations = [
-                    'ADMIN','DIRECTOR','ASST.QC','CHECKER','CLEANER','CUTTER',
-                    'DESIGNER','ELECTRICIAN','FABRIC ASSISTANT',
-                    'FINANCE & ACCOUNT DEPT','HELPER','IT','MECHANIC',
-                    'MERCHANDISER','MO','OFFICE BOY','OFFICE STAFF',
-                    'PATTER MASTER','PRESSMAN','PRINTING','PRO','QC',
-                    'QUALITY CHECKER','SAMPLE MAKER','SECURITY',
-                    'STORE KEEPERS','SUPERVISOR','TRIMMER'
-                ];
+                $designations = dept_get_designations($conn);
                 foreach ($designations as $d) {
                     $sel = (val($search_employee, 'designation') === $d) ? 'selected' : '';
                     echo '<option value="' . htmlspecialchars($d) . '" ' . $sel . '>' . htmlspecialchars($d) . '</option>';

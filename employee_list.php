@@ -2,6 +2,7 @@
 include 'auth.php';
 requirePermission('employee_view');
 include_once 'visa_helper.php';
+require_once 'department_helper.php';
 
 function esc($conn, $value) {
     return mysqli_real_escape_string($conn, trim((string)$value));
@@ -189,17 +190,9 @@ if ($count_res) {
     }
 }
 
-// --- Distinct values for Department, Designation, Nationality dropdowns ---
-$departments = [];
-if (isset($employee_columns['department'])) {
-    $dr = mysqli_query($conn, "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department!='' ORDER BY department ASC");
-    if ($dr) while ($row = mysqli_fetch_row($dr)) $departments[] = $row[0];
-}
-$designations = [];
-if (isset($employee_columns['designation'])) {
-    $dr = mysqli_query($conn, "SELECT DISTINCT designation FROM employees WHERE designation IS NOT NULL AND designation!='' ORDER BY designation ASC");
-    if ($dr) while ($row = mysqli_fetch_row($dr)) $designations[] = $row[0];
-}
+// --- Department, Designation (master list + values in use), Nationality dropdowns ---
+$departments  = dept_get_departments($conn);
+$designations = dept_get_designations($conn);
 $nationalities = [];
 if (isset($employee_columns['nationality'])) {
     $dr = mysqli_query($conn, "SELECT DISTINCT nationality FROM employees WHERE nationality IS NOT NULL AND nationality!='' ORDER BY nationality ASC");
