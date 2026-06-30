@@ -107,6 +107,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('gate_pass_manage')): ?>
         <a href="gate_pass.php" class="<?php echo appnav_active('gate_pass.php'); ?>">&#128682; Gate Pass</a>
         <?php endif; ?>
+        <?php if (hasPermission('memo_manage')): ?>
+        <a href="employee_memo.php" class="<?php echo appnav_active('employee_memo.php'); ?>">&#128203; Employee Memo</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
