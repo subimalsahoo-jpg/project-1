@@ -55,6 +55,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_memo']) && $is
 }
 
 /* ─────────────────────────────────────────────
+   Memo type management — Admin only (add / edit / delete)
+───────────────────────────────────────────── */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin && isset($_POST['save_type'])) {
+    $tid   = (int)($_POST['type_id'] ?? 0);
+    $tname = trim($_POST['type_name'] ?? '');
+    $tsub  = trim($_POST['type_subject'] ?? '');
+    $tbody = (string)($_POST['type_body'] ?? '');
+    if ($tname !== '') {
+        if ($tid > 0) {
+            $dup = mysqli_query($conn, "SELECT id FROM memo_types WHERE type_name='" . mysqli_real_escape_string($conn, $tname) . "' AND id<>$tid LIMIT 1");
+            if (!$dup || mysqli_num_rows($dup) === 0) {
+                $stmt = mysqli_prepare($conn, "UPDATE memo_types SET type_name=?, default_subject=?, default_body=? WHERE id=?");
+                mysqli_stmt_bind_param($stmt, 'sssi', $tname, $tsub, $tbody, $tid);
+                mysqli_stmt_execute($stmt);
+                mysqli_stmt_close($stmt);
+            }
+        } else {
+            $dup = mysqli_query($conn, "SELECT id FROM memo_types WHERE type_name='" . mysqli_real_escape_string($conn, $tname) . "' LIMIT 1");
+            if (!$dup || mysqli_num_rows($dup) === 0) {
+                $ord_r = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM memo_types"));
+                $ord = (int)($ord_r['n'] ?? 0);
+                $stmt = mysqli_prepare($conn, "INSERT INTO memo_types (type_name, default_subject, default_body, sort_order) VALUES (?,?,?,?)");
+                mysqli_stmt_bind_param($stmt, 'sssi', $tname, $tsub, $tbody, $ord);
+                mysqli_stmt_execute($stmt);
+                mysqli_stmt_close($stmt);
+            }
+        }
+    }
+    header("Location: employee_memo.php?type_saved=1");
+    exit();
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin && isset($_POST['delete_type'])) {
+    $tid = (int)($_POST['delete_type'] ?? 0);
+    if ($tid > 0) {
+        $stmt = mysqli_prepare($conn, "DELETE FROM memo_types WHERE id=?");
+        mysqli_stmt_bind_param($stmt, 'i', $tid);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+    header("Location: employee_memo.php?type_saved=1");
+    exit();
+}
+
+/* ─────────────────────────────────────────────
    Save a new memo
 ───────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_memo'])) {
@@ -66,7 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_memo'])) {
     $issued_by = trim($_POST['issued_by'] ?? '') ?: 'ADMIN In-charge';
     $origin    = $_POST['origin'] ?? '';
 
-    if (!in_array($memo_type, memo_types(), true)) $memo_type = 'General Notice';
+    $valid_types = memo_types($conn);
+    if (!in_array($memo_type, $valid_types, true)) $memo_type = $valid_types[0] ?? $memo_type;
     if ($memo_date === '') $memo_date = date('Y-m-d');
 
     /* Snapshot the employee — prefer live employee data, fall back to posted. */
@@ -121,6 +166,17 @@ if ($saved_id > 0) {
 if (isset($_GET['deleted'])) {
     $message = "<div class='memo-msg ok'>Memo deleted.</div>";
 }
+if (isset($_GET['type_saved'])) {
+    $message = "<div class='memo-msg ok'>Memo type list updated.</div>";
+}
+
+/* Admin: load a memo type for editing (prefills the manage form). */
+$edit_type_row = null;
+$edit_type_id  = (int)($_GET['edit_type'] ?? 0);
+if ($is_admin && $edit_type_id > 0) {
+    $etr = mysqli_query($conn, "SELECT * FROM memo_types WHERE id=" . $edit_type_id . " LIMIT 1");
+    if ($etr && mysqli_num_rows($etr) > 0) $edit_type_row = mysqli_fetch_assoc($etr);
+}
 
 /* ─────────────────────────────────────────────
    History list
@@ -151,14 +207,17 @@ if ($cq) {
     }
 }
 
-/* JS template data (subject + body per type) */
+/* Memo types (Admin-managed) + JS template data (subject + body per type). */
+$memo_type_rows = memo_type_rows($conn);
 $memo_js_templates = [];
-foreach (memo_types() as $t) {
-    $memo_js_templates[$t] = [
-        'subject' => memo_default_subject($t),
-        'body'    => memo_default_body($t),
+foreach ($memo_type_rows as $mt) {
+    $memo_js_templates[$mt['type_name']] = [
+        'subject' => (string)$mt['default_subject'],
+        'body'    => (string)$mt['default_body'],
     ];
 }
+$memo_first_subject = $memo_type_rows[0]['default_subject'] ?? '';
+$memo_first_body    = $memo_type_rows[0]['default_body'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -263,18 +322,18 @@ td{border-bottom:1px solid var(--gray-200);padding:9px 12px;font-size:13.5px;ver
                     <div class="fg">
                         <label>Memo Type</label>
                         <select id="memo_type" name="memo_type" onchange="memoApplyTemplate()">
-                            <?php foreach (memo_types() as $t): ?>
+                            <?php foreach ($memo_type_rows as $mt): $t = $mt['type_name']; ?>
                             <option value="<?php echo memo_h($t); ?>"><?php echo memo_h($t); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="fg full">
                         <label>Subject</label>
-                        <input type="text" id="memo_subject" name="subject" value="<?php echo memo_h(memo_default_subject(memo_types()[0])); ?>">
+                        <input type="text" id="memo_subject" name="subject" value="<?php echo memo_h($memo_first_subject); ?>">
                     </div>
                     <div class="fg full">
                         <label>Memo Body (editable)</label>
-                        <textarea id="memo_body" name="body"><?php echo memo_h(memo_default_body(memo_types()[0])); ?></textarea>
+                        <textarea id="memo_body" name="body"><?php echo memo_h($memo_first_body); ?></textarea>
                     </div>
                     <div class="fg">
                         <label>Issued By</label>
@@ -288,6 +347,58 @@ td{border-bottom:1px solid var(--gray-200);padding:9px 12px;font-size:13.5px;ver
             </form>
         </div>
     </div>
+
+    <?php if ($is_admin): ?>
+    <!-- Admin: Manage Memo Types -->
+    <div class="panel">
+        <div class="panel-head" style="background:#fff7ed;">&#9881; Manage Memo Types <span style="font-weight:500;color:#94a3b8;font-size:12px;">(Admin only)</span></div>
+        <div class="panel-body">
+            <form method="POST" action="employee_memo.php">
+                <input type="hidden" name="save_type" value="1">
+                <input type="hidden" name="type_id" value="<?php echo (int)($edit_type_row['id'] ?? 0); ?>">
+                <div class="form-grid">
+                    <div class="fg">
+                        <label>Type Name</label>
+                        <input type="text" name="type_name" required value="<?php echo memo_h($edit_type_row['type_name'] ?? ''); ?>" placeholder="e.g. Salary Deduction Notice">
+                    </div>
+                    <div class="fg" style="grid-column:span 2;">
+                        <label>Default Subject</label>
+                        <input type="text" name="type_subject" value="<?php echo memo_h($edit_type_row['default_subject'] ?? ''); ?>" placeholder="e.g. WARNING">
+                    </div>
+                    <div class="fg full">
+                        <label>Default Body (template, editable when issuing)</label>
+                        <textarea name="type_body" style="min-height:140px;"><?php echo memo_h($edit_type_row['default_body'] ?? ''); ?></textarea>
+                    </div>
+                </div>
+                <div style="margin-top:12px;">
+                    <button type="submit" class="btn btn-accent"><?php echo $edit_type_row ? '&#128190; Update Type' : '&#10133; Add Type'; ?></button>
+                    <?php if ($edit_type_row): ?><a href="employee_memo.php" class="btn btn-gray">Cancel</a><?php endif; ?>
+                </div>
+            </form>
+
+            <div class="table-wrap" style="margin-top:16px;">
+            <table>
+                <thead><tr><th>Type Name</th><th>Default Subject</th><th>Action</th></tr></thead>
+                <tbody>
+                    <?php foreach ($memo_type_rows as $mt): if ((int)($mt['id'] ?? 0) === 0) continue; ?>
+                    <tr>
+                        <td><?php echo memo_h($mt['type_name']); ?></td>
+                        <td><?php echo memo_h($mt['default_subject']); ?></td>
+                        <td style="white-space:nowrap;">
+                            <a class="act-btn" style="background:#2563eb;color:#fff;" href="employee_memo.php?edit_type=<?php echo (int)$mt['id']; ?>">Edit</a>
+                            <form method="POST" action="employee_memo.php" style="display:inline;" onsubmit="return confirm('Delete this memo type? Existing memos are not affected.');">
+                                <input type="hidden" name="delete_type" value="<?php echo (int)$mt['id']; ?>">
+                                <button type="submit" class="act-btn act-del">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- History -->
     <div class="panel">
