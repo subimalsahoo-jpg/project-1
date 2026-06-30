@@ -237,19 +237,30 @@ if ($vacationCheck && mysqli_num_rows($vacationCheck) > 0) {
     }
 }
 
+/* Who counts in the Today / This-month attendance figures and the Absent
+   Employees list. This mirrors absent_details.php (#90) and the active-employee
+   count above: NO status filter and NO resign-date cap. An employee keeps
+   counting (present shows present, absent shows absent) until they have
+   effectively left — signalled by a Completed visa cancellation, a filled visa
+   Cancel Date, or an Absconding reason. A blank cancel date still counts. */
 $dashboard_active_employee_condition = "employees.user_no IS NOT NULL";
-if ($status_col) {
-    $dashboard_active_employee_condition .= " AND (
-        LOWER(employees.`$status_col`)='active'
-        OR employees.`$status_col`=''
-        OR employees.`$status_col` IS NULL
-    )";
-}
-if (isset($employee_columns_dashboard['resign_date'])) {
-    $dashboard_active_employee_condition .= " AND (
-        employees.resign_date IS NULL
-        OR employees.resign_date=''
-        OR employees.resign_date >= attendance.attendance_date
+if ($vc_exists_dash && mysqli_num_rows($vc_exists_dash) > 0) {
+    $vc_cols_dash = [];
+    $vc_cols_q = mysqli_query($conn, "SHOW COLUMNS FROM visa_cancellations");
+    if ($vc_cols_q) while ($c = mysqli_fetch_assoc($vc_cols_q)) $vc_cols_dash[$c['Field']] = true;
+
+    $dash_exit_conds = ["LOWER(TRIM(vc_x.cancellation_status)) = 'completed'"];
+    if (isset($vc_cols_dash['cancellation_reason'])) {
+        $dash_exit_conds[] = "LOWER(TRIM(vc_x.cancellation_reason)) = 'absconding'";
+    }
+    if (isset($vc_cols_dash['visa_cancellation_date'])) {
+        $dash_exit_conds[] = "(vc_x.visa_cancellation_date IS NOT NULL AND TRIM(vc_x.visa_cancellation_date) != '' AND vc_x.visa_cancellation_date != '0000-00-00')";
+    }
+    $dashboard_active_employee_condition .= "
+    AND NOT EXISTS (
+        SELECT 1 FROM visa_cancellations vc_x
+        WHERE TRIM(vc_x.user_no) = TRIM(attendance.user_no)
+          AND (" . implode(' OR ', $dash_exit_conds) . ")
     )";
 }
 
