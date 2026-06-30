@@ -23,63 +23,39 @@ $status_col = isset($employee_columns['employee_status'])
     ? 'employee_status'
     : (isset($employee_columns['status']) ? 'status' : null);
 
-/* Resigned employees — and those serving notice — must still appear so their
-   absent days (up to their last working day) are counted. So we DO NOT filter
-   by status; we only cap rows at the effective last-working day, which is the
-   LATEST of resign_date, visa_cancellations.last_working_date and
-   notice_period_end. */
+/* An employee keeps appearing in the absent figures as long as they are still
+   on the company's books — i.e. their visa has NOT been cancelled. We do NOT
+   filter by status and we do NOT cap at last-working / resign date. An
+   employee is dropped ONLY once they have effectively left, signalled by ANY
+   of (this matches dashboard.php's "active employee" rule so the two stay in
+   sync):
+     • a Completed visa cancellation,
+     • the visa Cancel Date being filled (visa already cancelled), or
+     • an Absconding cancellation reason.
+   So an employee with a BLANK cancel date (e.g. still serving notice) keeps
+   counting normally: if absent, they show as absent. */
 $active_employee_condition = "e.user_no IS NOT NULL";
-
 $absent_vc_join = "";
-$cutoff_exprs   = [];
-if (isset($employee_columns['resign_date'])) {
-    $cutoff_exprs[] = "NULLIF(NULLIF(e.resign_date,''),'0000-00-00')";
-}
+
 $vc_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
 if ($vc_check && mysqli_num_rows($vc_check) > 0) {
     $vc_cols  = [];
     $vc_col_q = mysqli_query($conn, "SHOW COLUMNS FROM visa_cancellations");
     if ($vc_col_q) while ($c = mysqli_fetch_assoc($vc_col_q)) $vc_cols[$c['Field']] = true;
-    $vc_sel = [];
-    if (isset($vc_cols['last_working_date'])) $vc_sel[] = "MAX(NULLIF(NULLIF(last_working_date,''),'0000-00-00')) AS lwd";
-    if (isset($vc_cols['notice_period_end'])) $vc_sel[] = "MAX(NULLIF(NULLIF(notice_period_end,''),'0000-00-00')) AS npe";
-    if (!empty($vc_sel)) {
-        $absent_vc_join = "
-    LEFT JOIN (
-        SELECT TRIM(user_no) AS user_no, " . implode(', ', $vc_sel) . "
-        FROM visa_cancellations
-        GROUP BY TRIM(user_no)
-    ) vc ON vc.user_no = TRIM(a.user_no)";
-        if (isset($vc_cols['last_working_date'])) $cutoff_exprs[] = "vc.lwd";
-        if (isset($vc_cols['notice_period_end'])) $cutoff_exprs[] = "vc.npe";
-    }
 
-    /* Exit signals — an employee is dropped from the absent figures once they
-       have effectively left. Either:
-         • the visa has been cancelled (Cancel Date is filled), or
-         • the cancellation reason is Absconding.
-       Anyone with a blank (not-yet-cancelled) visa is still on duty and keeps
-       counting normally (absent shows as absent). */
-    $exit_conds = [];
+    $exit_conds = ["LOWER(TRIM(vc_x.cancellation_status)) = 'completed'"];
     if (isset($vc_cols['cancellation_reason'])) {
         $exit_conds[] = "LOWER(TRIM(vc_x.cancellation_reason)) = 'absconding'";
     }
     if (isset($vc_cols['visa_cancellation_date'])) {
         $exit_conds[] = "(vc_x.visa_cancellation_date IS NOT NULL AND TRIM(vc_x.visa_cancellation_date) != '' AND vc_x.visa_cancellation_date != '0000-00-00')";
     }
-    if (!empty($exit_conds)) {
-        $active_employee_condition .= "
+    $active_employee_condition .= "
         AND NOT EXISTS (
             SELECT 1 FROM visa_cancellations vc_x
             WHERE TRIM(vc_x.user_no) = TRIM(a.user_no)
               AND (" . implode(' OR ', $exit_conds) . ")
         )";
-    }
-}
-if (!empty($cutoff_exprs)) {
-    $no_cutoff = '(' . implode(' AND ', array_map(fn($e) => "$e IS NULL", $cutoff_exprs)) . ')';
-    $within    = '(' . implode(' OR ', array_map(fn($e) => "a.attendance_date <= $e", $cutoff_exprs)) . ')';
-    $active_employee_condition .= " AND ($no_cutoff OR $within)";
 }
 
 $where_search = "";
