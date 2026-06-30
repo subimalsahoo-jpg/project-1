@@ -33,11 +33,14 @@ $mpn_rows = [];
 $lq = mysqli_query($conn, "SELECT * FROM employee_memos WHERE user_no='$uno_esc' ORDER BY id DESC LIMIT 200");
 if ($lq) { while ($r = mysqli_fetch_assoc($lq)) { $mpn_rows[] = $r; } }
 
-/* JS template data (subject + body per type). */
+/* Memo types (Admin-managed) + JS template data (subject + body per type). */
+$mpn_type_rows = memo_type_rows($conn);
 $mpn_js_templates = [];
-foreach (memo_types() as $t) {
-    $mpn_js_templates[$t] = ['subject' => memo_default_subject($t), 'body' => memo_default_body($t)];
+foreach ($mpn_type_rows as $mt) {
+    $mpn_js_templates[$mt['type_name']] = ['subject' => (string)$mt['default_subject'], 'body' => (string)$mt['default_body']];
 }
+$mpn_first_subject = $mpn_type_rows[0]['default_subject'] ?? '';
+$mpn_first_body    = $mpn_type_rows[0]['default_body'] ?? '';
 $mpn_print_id = (int)($_GET['memo_print'] ?? 0);
 ?>
 
@@ -90,18 +93,18 @@ $mpn_print_id = (int)($_GET['memo_print'] ?? 0);
             <div class="mpn-fg">
                 <label>Memo Type</label>
                 <select id="mpnType" name="memo_type" onchange="mpnApplyTemplate()">
-                    <?php foreach (memo_types() as $t): ?>
+                    <?php foreach ($mpn_type_rows as $mt): $t = $mt['type_name']; ?>
                     <option value="<?= mpn_h($t) ?>"><?= mpn_h($t) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div class="mpn-fg full">
                 <label>Subject</label>
-                <input type="text" id="mpnSubject" name="subject" value="<?= mpn_h(memo_default_subject(memo_types()[0])) ?>">
+                <input type="text" id="mpnSubject" name="subject" value="<?= mpn_h($mpn_first_subject) ?>">
             </div>
             <div class="mpn-fg full">
                 <label>Memo Body (editable)</label>
-                <textarea id="mpnBodyText" name="body"><?= mpn_h(memo_default_body(memo_types()[0])) ?></textarea>
+                <textarea id="mpnBodyText" name="body"><?= mpn_h($mpn_first_body) ?></textarea>
             </div>
             <div class="mpn-fg">
                 <label>Issued By</label>
