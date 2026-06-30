@@ -109,7 +109,7 @@ if (($_GET['export'] ?? '') === 'csv') {
         'Emirates No','Visa Type','Visa Issue','Visa Expiry','Sponsor','Labour Card No',
         'Visa Cancel Date','Labour Card Cancel Date','Cancellation App No','Cancellation Status','Reason',
         'Last Working Day','Notice Start','Notice End','Basic Salary','Gratuity','Leave Encashment','Final Settlement','Settlement Status',
-        'Exit Country Date','Air Ticket','Re-entry Eligible','Passport Returned','Emirates ID Returned','Assets Returned','Clearance','Remarks'];
+        'Exit Country Date','Air Ticket','Passport Returned','Emirates ID Returned','Assets Returned','Clearance','Remarks'];
     $company = defined('COMPANY_NAME') ? COMPANY_NAME : '';
     $cell = function ($v) { $v = str_replace(["\r\n","\r","\n"], ' ', (string)$v); return '"' . str_replace('"', '""', $v) . '"'; };
     header('Content-Type: text/csv; charset=utf-8');
@@ -138,7 +138,7 @@ if (($_GET['export'] ?? '') === 'csv') {
             vc_date_dmy(vc_pick($r, ['last_working_date'])), vc_date_dmy(vc_pick($r, ['notice_period_start'])), vc_date_dmy(vc_pick($r, ['notice_period_end'])),
             money(vc_pick($r, ['basic_salary'], 0)), money(vc_pick($r, ['gratuity_amount'], 0)), money(vc_pick($r, ['leave_encashment'], 0)),
             money(vc_pick($r, ['final_settlement_amount'], 0)), vc_pick($r, ['settlement_status']),
-            vc_date_dmy(vc_pick($r, ['exit_country_date'])), vc_yn(vc_pick($r, ['air_ticket_provided'], 0)), vc_yn(vc_pick($r, ['re_entry_eligible'], 0)),
+            vc_date_dmy(vc_pick($r, ['exit_country_date'])), vc_pick($r, ['air_ticket_provided']),
             vc_yn(vc_pick($r, ['passport_returned'], 0)), vc_yn(vc_pick($r, ['emirates_id_returned'], 0)), vc_yn(vc_pick($r, ['company_assets_returned'], 0)),
             vc_pick($r, ['clearance_status']), vc_pick($r, ['remarks']),
         ];
@@ -191,7 +191,6 @@ if ($can_edit && isset($_GET['edit'])) {
                 'cancellation_reason' => $default_reason,
                 'settlement_status'   => 'Pending',
                 'clearance_status'    => 'Pending',
-                're_entry_eligible'   => 1,
             ];
         } else {
             $rec = ['user_no' => $new_user];
@@ -411,8 +410,7 @@ legend{font-weight:700;color:var(--brand);font-size:13px;padding:0 6px;}
                 <fieldset><legend>Exit Information</legend>
                     <div class="grid">
                         <div class="fgroup"><label>Exit Country Date</label><input type="date" name="exit_country_date" value="<?php echo vh(rv($rec,'exit_country_date')); ?>"></div>
-                        <div class="fgroup"><label>Air Ticket Provided</label><select name="air_ticket_provided"><option value="0" <?php echo (int)rv($rec,'air_ticket_provided',0)===0?'selected':''; ?>>No</option><option value="1" <?php echo (int)rv($rec,'air_ticket_provided',0)===1?'selected':''; ?>>Yes</option></select></div>
-                        <div class="fgroup"><label>Re-entry Eligible</label><select name="re_entry_eligible"><option value="1" <?php echo (int)rv($rec,'re_entry_eligible',1)===1?'selected':''; ?>>Yes</option><option value="0" <?php echo (int)rv($rec,'re_entry_eligible',1)===0?'selected':''; ?>>No</option></select></div>
+                        <div class="fgroup"><label>Air Ticket Provided</label><select name="air_ticket_provided"><?php $atv = (string)rv($rec,'air_ticket_provided','Company Ticket'); ?><option value="Company Ticket" <?php echo $atv==='Company Ticket'?'selected':''; ?>>Company Ticket</option><option value="Own Ticket" <?php echo $atv==='Own Ticket'?'selected':''; ?>>Own Ticket</option></select></div>
                         <div class="fgroup full"><label>Remarks</label><textarea name="remarks" rows="2"><?php echo vh(rv($rec,'remarks')); ?></textarea></div>
                     </div>
                 </fieldset>
