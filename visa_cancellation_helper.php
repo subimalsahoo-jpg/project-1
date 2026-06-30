@@ -103,7 +103,7 @@ if (!function_exists('vc_ensure_schema')) {
                 settlement_status VARCHAR(20) DEFAULT 'Pending',
                 -- Exit
                 exit_country_date DATE NULL,
-                air_ticket_provided TINYINT(1) DEFAULT 0,
+                air_ticket_provided VARCHAR(30) DEFAULT 'Company Ticket',
                 re_entry_eligible TINYINT(1) DEFAULT 1,
                 remarks TEXT,
                 -- Document tracking
@@ -125,6 +125,16 @@ if (!function_exists('vc_ensure_schema')) {
         $cols = vc_table_columns($conn, 'visa_cancellations');
         if (!isset($cols['emirates_number'])) {
             mysqli_query($conn, "ALTER TABLE visa_cancellations ADD COLUMN emirates_number VARCHAR(100) DEFAULT '' AFTER user_no");
+        }
+
+        // Air Ticket changed from a Yes/No flag to a choice (Company Ticket /
+        // Own Ticket). Convert legacy tinyint columns to VARCHAR and map old
+        // values: Yes(1) -> Company Ticket, No(0) -> Own Ticket.
+        $atc = mysqli_query($conn, "SHOW COLUMNS FROM visa_cancellations LIKE 'air_ticket_provided'");
+        if ($atc && ($atcr = mysqli_fetch_assoc($atc)) && stripos((string)($atcr['Type'] ?? ''), 'varchar') === false) {
+            mysqli_query($conn, "ALTER TABLE visa_cancellations MODIFY air_ticket_provided VARCHAR(30) DEFAULT 'Company Ticket'");
+            mysqli_query($conn, "UPDATE visa_cancellations SET air_ticket_provided='Company Ticket' WHERE air_ticket_provided='1'");
+            mysqli_query($conn, "UPDATE visa_cancellations SET air_ticket_provided='Own Ticket' WHERE air_ticket_provided='0'");
         }
     }
 }
@@ -272,7 +282,7 @@ if (!function_exists('vc_fetch_resigned_virtual')) {
                     'basic_salary' => vc_pick($e, ['basic_salary'], 0),
                     'gratuity_amount' => 0, 'leave_encashment' => 0,
                     'final_settlement_amount' => 0, 'settlement_status' => 'Pending',
-                    'exit_country_date' => null, 'air_ticket_provided' => 0, 're_entry_eligible' => 1,
+                    'exit_country_date' => null, 'air_ticket_provided' => 'Company Ticket', 're_entry_eligible' => 1,
                     'remarks' => '',
                     'passport_returned' => 0, 'emirates_id_returned' => 0, 'company_assets_returned' => 0,
                     'clearance_status' => 'Pending',
@@ -365,8 +375,8 @@ if (!function_exists('vc_editable_fields')) {
             'notice_period_start' => 'date', 'notice_period_end' => 'date',
             'basic_salary' => 'd', 'gratuity_amount' => 'd', 'leave_encashment' => 'd',
             'final_settlement_amount' => 'd', 'settlement_status' => 's',
-            'exit_country_date' => 'date', 'air_ticket_provided' => 'i',
-            're_entry_eligible' => 'i', 'remarks' => 's',
+            'exit_country_date' => 'date', 'air_ticket_provided' => 's',
+            'remarks' => 's',
             'passport_returned' => 'i', 'emirates_id_returned' => 'i',
             'company_assets_returned' => 'i', 'clearance_status' => 's',
         ];
