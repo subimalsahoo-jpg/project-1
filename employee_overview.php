@@ -1016,6 +1016,14 @@ textarea { height: 48px; resize: vertical; }
             🚪 Gate Pass
         </a>
         <?php endif; ?>
+        <?php if (hasPermission('memo_manage')): ?>
+        <a href="employee_overview.php?search=<?= $searchVal ?>&tab=memo"
+           class="tab-pill <?= $currentTab === 'memo' ? 'active' : '' ?>"
+           style="<?= $currentTab === 'memo' ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;' : 'color:#7c3aed;border-color:#7c3aed;' ?>"
+           title="Issue / view this employee's memos &amp; warning letters">
+            📋 Memo
+        </a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 </div>
@@ -2343,6 +2351,12 @@ elseif ($employee && $currentTab === 'documents'):
 /* ══ TAB: GATE PASS ═══════════════════════════════════════════════════════ */
 elseif ($employee && $currentTab === 'gatepass' && hasPermission('gate_pass_manage')):
     include 'gate_pass_panel.php';
+?>
+
+<?php
+/* ══ TAB: MEMO ════════════════════════════════════════════════════════════ */
+elseif ($employee && $currentTab === 'memo' && hasPermission('memo_manage')):
+    include 'memo_panel.php';
 ?>
 
 <?php else: ?>
