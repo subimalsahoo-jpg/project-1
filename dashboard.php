@@ -277,6 +277,16 @@ $dashboard_late_condition = "(
     )
 )";
 
+/* Fixed-salary staff (drivers / managers etc., where employees.fixed_salary > 0)
+   are NOT counted as LATE on the dashboard — neither in the Today "Late" number
+   nor in the "Late Employees" list. Their lateness still appears in the
+   Attendance Report; only the dashboard ignores it. Present / Absent are
+   unaffected, so a fixed-salary employee who does not punch still counts as
+   absent. */
+if (isset($employee_columns_dashboard['fixed_salary'])) {
+    $dashboard_late_condition .= " AND COALESCE(employees.fixed_salary, 0) = 0";
+}
+
 /* ─────────────────────────────────────────────
    This-month daily attendance chart
 ───────────────────────────────────────────── */
