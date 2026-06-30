@@ -19,6 +19,11 @@ $appnav_current = basename($_SERVER['PHP_SELF'] ?? '');
 $appnav_logo = function_exists('company_logo_img')
     ? company_logo_img(26, 'background:#fff;border-radius:5px;padding:2px;margin-right:8px;')
     : '';
+if (file_exists(__DIR__ . '/notebook_helper.php')) {
+    require_once __DIR__ . '/notebook_helper.php';
+}
+$appnav_unread = (isset($conn) && function_exists('notebook_unread_count'))
+    ? notebook_unread_count($conn, (int)($_SESSION['user_id'] ?? 0)) : 0;
 ?>
 <style>
 /* ── Shared side panel (scoped) ── */
@@ -41,6 +46,10 @@ body { padding-left: 250px; }
     display: flex; align-items: center; justify-content: space-between; color: #e7ecf3; text-decoration: none;
 }
 .appnav-title:hover, .appnav-title.active { background: #e8a020; color: #1a1a1a; }
+.appnav-badge { display:inline-block; min-width:20px; text-align:center; background:#e11d48; color:#fff; border-radius:999px; padding:1px 7px; font-size:12px; font-weight:700; margin-left:6px; }
+.appnav-badge.blink { animation: appnavBlink 1s steps(2, start) infinite; }
+@keyframes appnavBlink { 50% { opacity: .25; } }
+.appnav-badge.hidden { display:none; }
 .appnav-title .appnav-caret { font-size: 15px; line-height: 1; transition: transform .2s; }
 .appnav-sub { display: none; flex-direction: column; padding: 2px 0 6px 6px; }
 .appnav-sub.open { display: flex; }
@@ -89,6 +98,11 @@ body { padding-left: 250px; }
     <div class="appnav-brand"><?php echo $appnav_logo; ?> Payroll Management</div>
 
     <a href="dashboard.php" class="appnav-title <?php echo appnav_active('dashboard.php'); ?>">&#127968; Dashboard</a>
+
+    <a href="notebook.php" class="appnav-title <?php echo appnav_active('notebook.php'); ?>">
+        <span>&#128210; Notebook</span>
+        <span class="appnav-badge blink<?php echo $appnav_unread > 0 ? '' : ' hidden'; ?>" id="appnavNbBadge"><?php echo (int)$appnav_unread; ?></span>
+    </a>
 
     <?php if (hasPermission('employee_view') || hasPermission('employee_add') || hasPermission('accommodation_manage')): ?>
     <div class="appnav-title" onclick="appnavToggle('emp')">&#128100; Employees <span class="appnav-caret">&#9662;</span></div>
@@ -217,6 +231,23 @@ body { padding-left: 250px; }
 </aside>
 
 <script>
+/* Notebook: poll the unread count so the badge blinks even without a reload. */
+(function () {
+    var badge = document.getElementById('appnavNbBadge');
+    if (!badge) return;
+    function refresh() {
+        fetch('notebook.php?ajax=unread', { cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var n = (d && d.count) ? parseInt(d.count, 10) : 0;
+                badge.textContent = n;
+                if (n > 0) { badge.classList.remove('hidden'); badge.classList.add('blink'); }
+                else { badge.classList.add('hidden'); badge.classList.remove('blink'); }
+            })
+            .catch(function () {});
+    }
+    setInterval(refresh, 20000);
+})();
 function appnavToggle(id) {
     var el = document.getElementById('appnav-' + id);
     if (el) el.classList.toggle('open');
