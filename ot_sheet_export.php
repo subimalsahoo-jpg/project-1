@@ -98,6 +98,7 @@ $COL_ID    = 2;
 $COL_NAME  = 3;
 $COL_DAY1  = 4;
 $COL_LAST  = $COL_DAY1 + $daysInMonth;            // TOTAL column index
+$col       = fn($i) => Coordinate::stringFromColumnIndex($i); // column index → letter
 $lastColL  = Coordinate::stringFromColumnIndex($COL_LAST);
 $day1ColL  = Coordinate::stringFromColumnIndex($COL_DAY1);
 $dayNColL  = Coordinate::stringFromColumnIndex($COL_DAY1 + $daysInMonth - 1);
@@ -247,8 +248,3 @@ header('Pragma: public');
 $writer = new Xlsx($ss);
 $writer->save('php://output');
 exit;
-
-/* Helper: column index → letter (defined last; used above). */
-function col($i) {
-    return Coordinate::stringFromColumnIndex($i);
-}
