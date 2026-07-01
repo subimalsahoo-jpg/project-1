@@ -79,9 +79,37 @@ function ensure_crosschex_sync_table($conn) {
             imported_rows INT DEFAULT 0,
             updated_days INT DEFAULT 0,
             imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_file (file_name, file_size, file_mtime)
+            UNIQUE KEY uniq_mtime_size (file_mtime, file_size)
         )
     ");
+
+    /* A file is now considered "already synced" purely by its date/time (the
+       file's modified time) + size — NOT by its name. So a re-generated file
+       reusing an old name (e.g. 1.xls) still syncs as long as its date/time is
+       new. Migrate older tables that used the (file_name, file_size, file_mtime)
+       key. */
+    $hasOldKey = false;
+    $hasNewKey = false;
+    $idx = mysqli_query($conn, "SHOW INDEX FROM crosschex_sync_files");
+    if ($idx) {
+        while ($r = mysqli_fetch_assoc($idx)) {
+            $keyName = $r['Key_name'] ?? '';
+            if ($keyName === 'uniq_file')       $hasOldKey = true;
+            if ($keyName === 'uniq_mtime_size')  $hasNewKey = true;
+        }
+    }
+    if ($hasOldKey) {
+        mysqli_query($conn, "ALTER TABLE crosschex_sync_files DROP INDEX uniq_file");
+    }
+    if (!$hasNewKey) {
+        // Drop any exact (mtime,size) duplicates before enforcing the new key.
+        mysqli_query($conn, "
+            DELETE t1 FROM crosschex_sync_files t1
+            INNER JOIN crosschex_sync_files t2
+              ON t1.file_mtime = t2.file_mtime AND t1.file_size = t2.file_size AND t1.id > t2.id
+        ");
+        mysqli_query($conn, "ALTER TABLE crosschex_sync_files ADD UNIQUE KEY uniq_mtime_size (file_mtime, file_size)");
+    }
 }
 
 function employee_by_device_id($conn, $deviceId) {
@@ -286,12 +314,14 @@ if ($shouldRun && !is_dir($exportDir)) {
         $safeFileSize = (int)$fileSize;
         $safeFileMtime = (int)$fileMtime;
 
+        /* Skip only if a file with this SAME date/time (modified time) + size
+           was already synced. The file name is intentionally NOT part of this
+           check, so a new file that reuses an old name still syncs. */
         $already = mysqli_query($conn, "
             SELECT id
             FROM crosschex_sync_files
-            WHERE file_name = '$safeFileName'
+            WHERE file_mtime = $safeFileMtime
               AND file_size = $safeFileSize
-              AND file_mtime = $safeFileMtime
             LIMIT 1
         ");
 
