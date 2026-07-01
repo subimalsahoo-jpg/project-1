@@ -47,13 +47,15 @@ $blank       = isset($_GET['blank']) && $_GET['blank'] == '1';
 $empCols = [];
 $cr = mysqli_query($conn, "SHOW COLUMNS FROM employees");
 if ($cr) { while ($c = mysqli_fetch_assoc($cr)) { $empCols[$c['Field']] = true; } }
-$hasStatus = isset($empCols['status']);
+$statusCol = isset($empCols['employee_status']) ? 'employee_status'
+           : (isset($empCols['status']) ? 'status' : null);
+$hasStatus = $statusCol !== null;
 $hasDept   = isset($empCols['department']);
 
 /* ── Employees (numeric user_no only → importable) ─────────── */
 $selectCols = "user_no, COALESCE(full_name,'') AS full_name"
             . ($hasDept   ? ", COALESCE(department,'') AS department" : "")
-            . ($hasStatus ? ", COALESCE(status,'')     AS status"     : "");
+            . ($hasStatus ? ", COALESCE($statusCol,'') AS status"     : "");
 $empRes = mysqli_query($conn, "
     SELECT $selectCols
     FROM employees
@@ -76,6 +78,74 @@ if (!$blank) {
     if ($otRes) {
         while ($r = mysqli_fetch_assoc($otRes)) {
             $otMap[$r['user_no']][(int) $r['d']] = $r;
+        }
+    }
+}
+
+/* ── Absence & vacation info for the month (prefill / colour) ──
+   $absentMap[user_no][day]   = true → show "A"
+   $vacationMap[user_no][day] = true → colour the cell yellow      */
+$absentMap   = [];
+$vacationMap = [];
+
+$otExportTableExists = function ($conn, $t) {
+    $r = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $t) . "'");
+    return $r && mysqli_num_rows($r) > 0;
+};
+
+if (!$blank) {
+    $safeMonth  = mysqli_real_escape_string($conn, $month);
+    $monthStart = sprintf('%04d-%02d-01', $yr, $mo);
+    $monthEnd   = sprintf('%04d-%02d-%02d', $yr, $mo, $daysInMonth);
+
+    $hasVacations = $otExportTableExists($conn, 'vacations');
+    $hasHolidays  = $otExportTableExists($conn, 'holidays');
+
+    // Vacation days → yellow. Effective end = return_date or to_date.
+    if ($hasVacations) {
+        $vres = mysqli_query($conn, "
+            SELECT user_no, from_date,
+                   COALESCE(NULLIF(return_date,'0000-00-00'), to_date) AS eff_to
+            FROM vacations
+            WHERE COALESCE(vacation_status,'') <> 'Cancelled'
+              AND from_date <= '$monthEnd'
+              AND COALESCE(NULLIF(return_date,'0000-00-00'), to_date) >= '$monthStart'
+        ");
+        if ($vres) {
+            while ($v = mysqli_fetch_assoc($vres)) {
+                $uno  = trim((string) $v['user_no']);
+                $from = strtotime((string) $v['from_date']);
+                $to   = strtotime((string) $v['eff_to']);
+                if ($uno === '' || !$from || !$to) continue;
+                $from = max($from, strtotime($monthStart));
+                $to   = min($to,   strtotime($monthEnd));
+                for ($t = $from; $t <= $to; $t += 86400) {
+                    $vacationMap[$uno][(int) date('j', $t)] = true;
+                }
+            }
+        }
+    }
+
+    // Absent days → "A". Empty check-in, excluding Sundays, holidays and vacation.
+    if ($otExportTableExists($conn, 'attendance')) {
+        $holClause = $hasHolidays
+            ? " AND a.attendance_date NOT IN (SELECT holiday_date FROM holidays)"
+            : "";
+        $ares = mysqli_query($conn, "
+            SELECT a.user_no, DAY(a.attendance_date) AS d
+            FROM attendance a
+            WHERE DATE_FORMAT(a.attendance_date, '%Y-%m') = '$safeMonth'
+              AND (a.check_in IS NULL OR TRIM(a.check_in) = '')
+              AND DAYNAME(a.attendance_date) <> 'Sunday'
+              $holClause
+        ");
+        if ($ares) {
+            while ($a = mysqli_fetch_assoc($ares)) {
+                $uno = trim((string) $a['user_no']);
+                $day = (int) $a['d'];
+                if ($uno === '' || isset($vacationMap[$uno][$day])) continue; // vacation wins over absent
+                $absentMap[$uno][$day] = true;
+            }
         }
     }
 }
@@ -178,11 +248,13 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
 }
 
 /* ── Data rows ─────────────────────────────────────────────── */
+$VAC_YELLOW = 'FEF08A';   // on Vacation
+$RESIGN_RED = 'FECACA';   // Resigned
 $rowNum = $HEADER_ROW + 2;
 $sl     = 1;
 foreach ($employees as $emp) {
-    $uno      = $emp['user_no'];
-    $resigned = $hasStatus && strcasecmp(trim($emp['status']), 'Resigned') === 0;
+    $uno      = trim((string) $emp['user_no']);
+    $resigned = $hasStatus && strcasecmp(trim((string) $emp['status']), 'Resigned') === 0;
 
     $sheet->setCellValueExplicit($col($COL_ID) . $rowNum, (string) $uno, DataType::TYPE_STRING);
     $sheet->setCellValue($col($COL_SL)   . $rowNum, $sl);
@@ -191,21 +263,26 @@ foreach ($employees as $emp) {
     for ($d = 1; $d <= $daysInMonth; $d++) {
         $cellRef  = $col($COL_DAY1 + $d - 1) . $rowNum;
         $isSunday = (int) date('N', mktime(0, 0, 0, $mo, $d, $yr)) === 7;
-        $val      = ot_cell_value($otMap[$uno][$d] ?? null);
+        $onLeave  = isset($vacationMap[$uno][$d]);
+
+        // Cell text: OT number / A / GP from a prior upload; else "A" from attendance.
+        $val = ot_cell_value($otMap[$uno][$d] ?? null);
+        if ($val === null && isset($absentMap[$uno][$d])) $val = 'A';
 
         if (is_string($val)) {
             $sheet->setCellValueExplicit($cellRef, $val, DataType::TYPE_STRING);
-            // A = light gray, GP = amber (reference only)
-            $rgb = $val === 'A' ? 'E2E8F0' : 'FDE68A';
-            $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($rgb);
         } elseif ($val !== null) {
             $sheet->setCellValue($cellRef, $val);
-            if ($isSunday) {
-                $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
-            }
-        } elseif ($isSunday) {
-            // Blank Sunday cell → light red tint so the column reads as Sunday
-            $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
+        }
+
+        // Cell fill (a resigned row is painted red afterwards and overrides these).
+        $fill = null;
+        if ($onLeave)          $fill = $VAC_YELLOW; // Vacation → yellow
+        elseif ($val === 'A')  $fill = 'E2E8F0';    // Absent → light gray
+        elseif ($val === 'GP') $fill = 'FDE68A';    // Internal Gate Pass → amber
+        elseif ($isSunday)     $fill = $SUNDAY_RED; // Sunday column → light red
+        if ($fill !== null) {
+            $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($fill);
         }
     }
 
@@ -215,10 +292,10 @@ foreach ($employees as $emp) {
         '=SUM(' . $day1ColL . $rowNum . ':' . $dayNColL . $rowNum . ')'
     );
 
-    // Resigned → red name cell (reference only, not imported)
+    // Resigned → whole row red (reference only, not imported)
     if ($resigned) {
-        $sheet->getStyle($col($COL_NAME) . $rowNum)
-              ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FECACA');
+        $sheet->getStyle($col($COL_SL) . $rowNum . ':' . $lastColL . $rowNum)
+              ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($RESIGN_RED);
     }
 
     $rowNum++;
