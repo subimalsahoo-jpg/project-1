@@ -137,6 +137,25 @@ if (isset($_POST['upload_ot']) && isset($_FILES['ot_file']) && $_FILES['ot_file'
                 $message = "<div class='error'>Could not read the grid. Make sure there is a header row with <b>ID</b>, <b>NAME</b> and day columns 1..31.</div>";
             } else {
                 $saved = 0; $otDays = 0; $gp = 0; $absent = 0; $employeesSeen = 0;
+
+                // Bulk-insert in batches inside one transaction. Doing a
+                // separate INSERT per cell (≈ employees × 31) is thousands of
+                // round-trips and times out; batching cuts it to a handful.
+                @set_time_limit(300);
+                mysqli_query($conn, "SET autocommit=0");
+                mysqli_begin_transaction($conn);
+
+                $batch = [];
+                $flushBatch = function () use ($conn, &$batch) {
+                    if (!$batch) return;
+                    mysqli_query($conn,
+                        "INSERT INTO overtime_records (user_no, attendance_date, ot_hours, note) VALUES "
+                        . implode(',', $batch)
+                        . " ON DUPLICATE KEY UPDATE ot_hours=VALUES(ot_hours), note=VALUES(note)"
+                    );
+                    $batch = [];
+                };
+
                 foreach ($rows as $rowNumber => $row) {
                     if ($rowNumber <= $headerRow) continue;
                     $user_no = trim((string)($row[$userCol] ?? ''));
@@ -154,14 +173,15 @@ if (isset($_POST['upload_ot']) && isset($_FILES['ot_file']) && $_FILES['ot_file'
                         $sd = mysqli_real_escape_string($conn, $date);
                         $sn = mysqli_real_escape_string($conn, $note);
                         $so = (float)$ot;
-                        mysqli_query($conn, "
-                            INSERT INTO overtime_records (user_no, attendance_date, ot_hours, note)
-                            VALUES ('$su', '$sd', '$so', '$sn')
-                            ON DUPLICATE KEY UPDATE ot_hours='$so', note='$sn'
-                        ");
+                        $batch[] = "('$su', '$sd', '$so', '$sn')";
                         $saved++;
+                        if (count($batch) >= 500) $flushBatch();
                     }
                 }
+                $flushBatch();
+
+                mysqli_commit($conn);
+                mysqli_query($conn, "SET autocommit=1");
                 $monthLabel = date('F Y', mktime(0, 0, 0, $mo, 1, $yr));
                 $message = "<div class='success'>OT uploaded for <b>$monthLabel</b>. Employees: $employeesSeen, Cells saved: $saved, OT days: $otDays, Internal Gate Pass: $gp, Absent: $absent.</div>";
             }
