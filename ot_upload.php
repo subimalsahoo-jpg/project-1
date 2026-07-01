@@ -59,7 +59,7 @@ function ot_detect_month_from_sheet($sheet) {
     $maxColIdx = min(40, Coordinate::columnIndexFromString($sheet->getHighestColumn()));
     for ($r = 1; $r <= $maxRow; $r++) {
         for ($c = 1; $c <= $maxColIdx; $c++) {
-            $val = trim((string)$sheet->getCellByColumnAndRow($c, $r)->getValue());
+            $val = trim((string)$sheet->getCell([$c, $r])->getValue());
             if ($val === '') continue;
             // "Month of June 2026"
             if (preg_match('/month\s+of\s+([A-Za-z]+)\s+(\d{4})/i', $val, $m)) {
@@ -200,6 +200,8 @@ input[type=month]{padding:8px;border:1px solid #cbd5e1;border-radius:6px;}
 
 <a href="dashboard.php" class="btn">Dashboard</a>
 <a href="overtime_report.php" class="btn">Over Time Report</a>
+<a href="#" id="dlOtSheet" class="btn" style="background:#16a34a;">&#8681; Download OT Excel</a>
+<a href="#" id="dlOtBlank" class="btn" style="background:#2563a8;">&#8681; Blank Template</a>
 
 <h2>OT Excel Upload</h2>
 
@@ -211,7 +213,8 @@ input[type=month]{padding:8px;border:1px solid #cbd5e1;border-radius:6px;}
             <b>Excel format (monthly grid):</b><br>
             &bull; A heading like <code>Month of June 2026</code> sets the month; day columns are just <code>1 2 3 … 31</code>.<br>
             &bull; Columns: <code>Sl No | ID (User No) | NAME | 1 … 31 | TOTAL</code>.<br>
-            &bull; Each day cell = that day's Over Time hours.
+            &bull; Each day cell = that day's Over Time hours.<br>
+            &bull; Use the <b>&#8681; Download OT Excel</b> button above to get this exact sheet (pre-filled with the selected month's OT) &mdash; edit it and upload it back.
         </div>
 
         <div class="legend">
@@ -235,6 +238,30 @@ input[type=month]{padding:8px;border:1px solid #cbd5e1;border-radius:6px;}
         <button type="submit" name="upload_ot" class="btn">Upload OT Excel</button>
     </form>
 </div>
+
+<script>
+(function () {
+    function currentMonth() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    function monthVal() {
+        var el = document.querySelector('input[name="ot_month"]');
+        var v = el && el.value ? el.value : '';
+        return /^\d{4}-\d{2}$/.test(v) ? v : currentMonth();
+    }
+    var withData = document.getElementById('dlOtSheet');
+    var blank    = document.getElementById('dlOtBlank');
+    if (withData) withData.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.location.href = 'ot_sheet_export.php?month=' + encodeURIComponent(monthVal());
+    });
+    if (blank) blank.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.location.href = 'ot_sheet_export.php?month=' + encodeURIComponent(monthVal()) + '&blank=1';
+    });
+})();
+</script>
 
 </body>
 </html>
