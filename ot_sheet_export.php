@@ -152,16 +152,33 @@ $sheet->getStyle($col($COL_SL) . $HEADER_ROW . ':' . $lastColL . $HEADER_ROW)->a
 ]);
 $sheet->getRowDimension($HEADER_ROW)->setRowHeight(20);
 
-/* Highlight weekend (Friday) day-headers for reference */
+/* Row 5 – day-of-week row (Su, Mo, Tu, … under each date) */
+$DAY_ROW    = $HEADER_ROW + 1;
+$SUNDAY_RED = 'FFD5D5';
+$sheet->setCellValue($col($COL_NAME) . $DAY_ROW, 'Day');
 for ($d = 1; $d <= $daysInMonth; $d++) {
-    if (date('N', mktime(0, 0, 0, $mo, $d, $yr)) == 5) { // 5 = Friday
-        $sheet->getStyle($col($COL_DAY1 + $d - 1) . $HEADER_ROW)
-              ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('2563A8');
-    }
+    $lbl = substr(date('D', mktime(0, 0, 0, $mo, $d, $yr)), 0, 2); // Su, Mo, Tu, …
+    $sheet->setCellValueExplicit($col($COL_DAY1 + $d - 1) . $DAY_ROW, $lbl, DataType::TYPE_STRING);
+}
+// Base style for the whole day row
+$sheet->getStyle($col($COL_SL) . $DAY_ROW . ':' . $lastColL . $DAY_ROW)->applyFromArray([
+    'font'      => ['bold' => true, 'size' => 9, 'color' => ['rgb' => '334155']],
+    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EEF2F7']],
+    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+]);
+$sheet->getStyle($col($COL_NAME) . $DAY_ROW)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+$sheet->getRowDimension($DAY_ROW)->setRowHeight(16);
+// Sunday → light red (date header cell + day-of-week cell)
+for ($d = 1; $d <= $daysInMonth; $d++) {
+    if ((int) date('N', mktime(0, 0, 0, $mo, $d, $yr)) !== 7) continue; // 7 = Sunday
+    $dc = $col($COL_DAY1 + $d - 1);
+    $sheet->getStyle($dc . $HEADER_ROW)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
+    $sheet->getStyle($dc . $HEADER_ROW)->getFont()->getColor()->setRGB('991B1B');
+    $sheet->getStyle($dc . $DAY_ROW)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
 }
 
 /* ── Data rows ─────────────────────────────────────────────── */
-$rowNum = $HEADER_ROW + 1;
+$rowNum = $HEADER_ROW + 2;
 $sl     = 1;
 foreach ($employees as $emp) {
     $uno      = $emp['user_no'];
@@ -172,16 +189,23 @@ foreach ($employees as $emp) {
     $sheet->setCellValue($col($COL_NAME) . $rowNum, $emp['full_name']);
 
     for ($d = 1; $d <= $daysInMonth; $d++) {
-        $cellRef = $col($COL_DAY1 + $d - 1) . $rowNum;
-        $val     = ot_cell_value($otMap[$uno][$d] ?? null);
-        if ($val === null) continue;
+        $cellRef  = $col($COL_DAY1 + $d - 1) . $rowNum;
+        $isSunday = (int) date('N', mktime(0, 0, 0, $mo, $d, $yr)) === 7;
+        $val      = ot_cell_value($otMap[$uno][$d] ?? null);
+
         if (is_string($val)) {
             $sheet->setCellValueExplicit($cellRef, $val, DataType::TYPE_STRING);
             // A = light gray, GP = amber (reference only)
             $rgb = $val === 'A' ? 'E2E8F0' : 'FDE68A';
             $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($rgb);
-        } else {
+        } elseif ($val !== null) {
             $sheet->setCellValue($cellRef, $val);
+            if ($isSunday) {
+                $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
+            }
+        } elseif ($isSunday) {
+            // Blank Sunday cell → light red tint so the column reads as Sunday
+            $sheet->getStyle($cellRef)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($SUNDAY_RED);
         }
     }
 
@@ -208,11 +232,11 @@ if ($lastDataRow >= $HEADER_ROW) {
     $sheet->getStyle($range)->getBorders()->getAllBorders()
           ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
     // Center Sl No, ID, day cells, TOTAL
-    $sheet->getStyle($col($COL_SL) . ($HEADER_ROW + 1) . ':' . $col($COL_ID) . $lastDataRow)
+    $sheet->getStyle($col($COL_SL) . ($HEADER_ROW + 2) . ':' . $col($COL_ID) . $lastDataRow)
           ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle($day1ColL . ($HEADER_ROW + 1) . ':' . $lastColL . $lastDataRow)
+    $sheet->getStyle($day1ColL . ($HEADER_ROW + 2) . ':' . $lastColL . $lastDataRow)
           ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $sheet->getStyle($lastColL . ($HEADER_ROW + 1) . ':' . $lastColL . $lastDataRow)
+    $sheet->getStyle($lastColL . ($HEADER_ROW + 2) . ':' . $lastColL . $lastDataRow)
           ->getFont()->setBold(true);
 }
 
@@ -232,7 +256,7 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     $sheet->getColumnDimension($col($COL_DAY1 + $d - 1))->setWidth(4.5);
 }
 $sheet->getColumnDimension($lastColL)->setWidth(8);
-$sheet->freezePane($day1ColL . ($HEADER_ROW + 1)); // freeze Sl/ID/NAME + header
+$sheet->freezePane($day1ColL . ($HEADER_ROW + 2)); // freeze Sl/ID/NAME + header + day row
 
 /* ── Stream the file ───────────────────────────────────────── */
 $fname = 'ot_sheet_' . $month . ($blank ? '_blank' : '') . '.xlsx';
