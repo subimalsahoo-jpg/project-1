@@ -45,7 +45,9 @@ function ex_departed_list($conn, $search = '') {
         LEFT JOIN employees e ON e.user_no = vc.user_no
         WHERE vc.cancellation_status='Completed' $cond
         GROUP BY vc.user_no, e.full_name, e.employee_id, e.department, e.designation
-        ORDER BY CAST(vc.user_no AS UNSIGNED), vc.user_no
+        ORDER BY (last_working_date IS NULL OR last_working_date = '' OR last_working_date = '0000-00-00') ASC,
+                 last_working_date DESC,
+                 CAST(vc.user_no AS UNSIGNED)
     ");
     if ($q) { while ($r = mysqli_fetch_assoc($q)) { $rows[] = $r; } }
     return $rows;
