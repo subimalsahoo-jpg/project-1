@@ -154,6 +154,9 @@ body { padding-left: 250px; }
         <?php if (hasPermission('salary_slip_print')): ?>
         <a href="salary_slip.php" class="<?php echo appnav_active('salary_slip.php'); ?>">&#129534; Salary Slip</a>
         <?php endif; ?>
+        <?php if (hasPermission('reports_view') || hasPermission('salary_view')): ?>
+        <a href="salary_increment_report.php" class="<?php echo appnav_active('salary_increment_report.php'); ?>">&#128200; Salary Increment</a>
+        <?php endif; ?>
         <?php if (hasPermission('attendance_report')): ?>
         <a href="attendance_report.php" class="<?php echo appnav_active('attendance_report.php'); ?>">&#128337; Attendance Report</a>
         <?php endif; ?>
