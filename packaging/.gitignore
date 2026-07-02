@@ -1,0 +1,7 @@
+# Generated database seed (may contain real employee data - do NOT commit)
+db/payroll.sql
+db/*.sql
+
+# Inno Setup build output
+dist/
+*.exe
