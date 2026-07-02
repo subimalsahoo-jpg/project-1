@@ -1214,9 +1214,10 @@ table.salary-table tbody tr td { position: static !important; }
 </style>
 </head>
 <body>
-<?php include 'nav_sidebar.php'; ?>
+<?php if (!$is_excel_export) include 'nav_sidebar.php'; ?>
 
 <!-- â•â• TOP BAR â•â• -->
+<?php if (!$is_excel_export): ?>
 <div class="topbar">
     <div class="topbar-left">
         <a href="dashboard.php" class="btn-back">&#8592; Dashboard</a>
@@ -1239,11 +1240,13 @@ table.salary-table tbody tr td { position: static !important; }
         <button onclick="window.print()" class="btn btn-outline" style="height:36px;">&#128438; Print</button>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- â•â• FILTER PANEL + CONTENT â•â• -->
 <div class="page-content">
 
 <!-- â•â• FILTER PANEL â•â• -->
+<?php if (!$is_excel_export): ?>
 <div class="filter-panel">
     <form method="GET">
         <div class="filter-inner">
@@ -1265,6 +1268,7 @@ table.salary-table tbody tr td { position: static !important; }
         </div>
     </form>
 </div>
+<?php endif; ?>
 
 <?php if ($show_salary_sheet) { ?>
 
@@ -1276,10 +1280,12 @@ table.salary-table tbody tr td { position: static !important; }
 <input type="hidden" name="food_filter"    value="<?php echo htmlspecialchars($food_filter); ?>">
 
 <!-- Actions bar (top) -->
+<?php if (!$is_excel_export): ?>
 <div class="actions-bar" id="actionsTop">
     <label><input type="checkbox" id="selectAllTop"> Select All</label>
     <button type="submit" name="generate"   value="1" class="btn btn-warning selected-generate-btn">&#9654; Generate Salary Sheet</button>
 </div>
+<?php endif; ?>
 
 <!-- Table -->
 <div class="table-wrapper" id="tableScroll">
@@ -1648,11 +1654,13 @@ while ($emp = mysqli_fetch_assoc($result)) {
 </table>
 </div><!-- /table-wrapper -->
 
+<?php if (!$is_excel_export): ?>
 <!-- Bottom actions bar -->
 <div class="actions-bar" style="border-top:2px solid rgba(255,255,255,0.15); flex-shrink:0;">
     <label><input type="checkbox" id="selectAllBottom"> Select All</label>
     <button type="submit" name="generate"  value="1" class="btn btn-warning selected-generate-btn">&#9654; Generate Salary Sheet</button>
 </div>
+<?php endif; ?>
 </form>
 
 <?php } else { ?>
