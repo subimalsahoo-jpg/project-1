@@ -17,6 +17,7 @@ $flash_type = 'ok';
 $gender  = ($_GET['gender'] ?? '') === 'Girls' ? 'Girls' : (($_GET['gender'] ?? '') === 'Boys' ? 'Boys' : '');
 $room_id = (int)($_GET['room_id'] ?? 0);
 $loc     = in_array($_GET['loc'] ?? '', $LOCATIONS, true) ? $_GET['loc'] : '';
+$emp_find = trim($_GET['emp_find'] ?? '');
 
 /* ─────────────────────────────────────────────
    POST actions
@@ -357,12 +358,63 @@ tbody td.l{text-align:left;}
     $rooms = acc_rooms_with_counts($conn, $gender, $loc);
     $cap_sum = 0; $free_sum = 0;
     foreach ($rooms as $rm) { $cap_sum += (int)$rm['capacity']; $free_sum += (int)$rm['free_space']; }
+
+    // Employee lookup — "which room is this person in?"
+    $find_emp = null; $find_current = null; $find_msg = '';
+    if ($emp_find !== '') {
+        $find_emp = acc_find_employee($conn, $emp_find);
+        if ($find_emp) {
+            $find_current = acc_employee_current($conn, $find_emp['user_no']);
+        } else {
+            $find_msg = 'No employee found for "' . ac_h($emp_find) . '".';
+        }
+    }
 ?>
     <!-- Location tabs -->
     <div class="loctabs">
         <a class="loctab <?php echo $loc === '' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>">All Locations</a>
         <a class="loctab <?php echo $loc === 'Saif Zone' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>&loc=Saif+Zone">Saif Zone</a>
         <a class="loctab <?php echo $loc === 'Out Side' ? 'active' : ''; ?>" href="accommodation.php?gender=<?php echo $gender; ?>&loc=Out+Side">Out Side (outside Saif Zone)</a>
+    </div>
+
+    <!-- Find employee (which room?) -->
+    <div class="panel">
+        <div class="panel-head">&#128269; Find Employee &mdash; which room?</div>
+        <div class="panel-body">
+            <form method="GET" class="row">
+                <input type="hidden" name="gender" value="<?php echo $gender; ?>">
+                <?php if ($loc !== ''): ?><input type="hidden" name="loc" value="<?php echo ac_h($loc); ?>"><?php endif; ?>
+                <div class="fg" style="flex:1;">
+                    <label>Employee ID / User No / Name</label>
+                    <input type="text" name="emp_find" value="<?php echo ac_h($emp_find); ?>" placeholder="e.g. 1604 or MOHAMMED" style="min-width:280px;">
+                </div>
+                <button class="btn btn-primary" type="submit">&#128269; Search</button>
+                <?php if ($emp_find !== ''): ?>
+                    <a class="btn btn-gray" href="accommodation.php?gender=<?php echo $gender; ?><?php echo $loc !== '' ? '&loc=' . urlencode($loc) : ''; ?>">Clear</a>
+                <?php endif; ?>
+            </form>
+
+            <?php if ($emp_find !== ''): ?>
+                <?php if ($find_emp && $find_current): ?>
+                    <div class="emp-box">
+                        <div><span>Employee ID</span><b><?php echo ac_h(($find_emp['employee_id'] ?? '') !== '' ? $find_emp['employee_id'] : $find_emp['user_no']); ?></b></div>
+                        <div><span>User No</span><b><?php echo ac_h($find_emp['user_no']); ?></b></div>
+                        <div><span>Name</span><b><?php echo ac_h($find_emp['full_name'] ?? ''); ?></b></div>
+                        <div><span>Gender</span><b><?php echo ac_h($find_emp['gender'] ?? ''); ?></b></div>
+                        <div><span>Department</span><b><?php echo ac_h($find_emp['department'] ?? ''); ?></b></div>
+                        <div>
+                            <span>Room</span>
+                            <b><?php echo ac_h($find_current['gender']); ?> &middot; <?php echo ac_h($find_current['main_location']); ?><?php echo $find_current['tower_block'] !== '' ? ' &middot; ' . ac_h($find_current['tower_block']) : ''; ?> &middot; Room <?php echo ac_h($find_current['room_number']); ?></b>
+                        </div>
+                        <a class="btn btn-sm btn-success" href="accommodation.php?gender=<?php echo urlencode($find_current['gender']); ?>&room_id=<?php echo (int)$find_current['room_id']; ?>">View Room</a>
+                    </div>
+                <?php elseif ($find_emp): ?>
+                    <div class="flash err" style="margin-top:12px;"><b><?php echo ac_h($find_emp['full_name'] ?? $find_emp['user_no']); ?></b> (User No <?php echo ac_h($find_emp['user_no']); ?>) is <b>not allocated</b> to any room yet.</div>
+                <?php else: ?>
+                    <div class="flash err" style="margin-top:12px;"><?php echo $find_msg; ?></div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Summary -->
