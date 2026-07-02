@@ -30,12 +30,16 @@ function ex_val($row, $keys, $d = '') {
 }
 
 /* Departed employees = visa cancellation Completed (latest per user). */
-function ex_departed_list($conn, $search = '') {
+function ex_departed_list($conn, $search = '', $gender = '') {
     $rows = [];
     $vt = mysqli_query($conn, "SHOW TABLES LIKE 'visa_cancellations'");
     if (!$vt || mysqli_num_rows($vt) === 0) return $rows;
     $s = mysqli_real_escape_string($conn, $search);
     $cond = $search !== '' ? "AND (vc.user_no LIKE '%$s%' OR e.full_name LIKE '%$s%')" : '';
+    if ($gender !== '') {
+        $g = mysqli_real_escape_string($conn, $gender);
+        $cond .= " AND e.gender = '$g'";
+    }
     $q = mysqli_query($conn, "
         SELECT vc.user_no,
                MAX(vc.cancellation_reason) AS cancellation_reason,
@@ -190,6 +194,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel' && $emp) {
 }
 
 $search = trim($_GET['search'] ?? '');
+$gender = trim($_GET['gender'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -245,15 +250,21 @@ tbody td.l{text-align:left;}
     <div class="crumbs"><a href="ex_employee_records.php">All Ex-Employees</a><?php if ($emp): ?> &rsaquo; <?php echo ex_h(ex_val($emp, ['full_name','name'])); ?><?php endif; ?></div>
 
 <?php if (!$emp): /* ── List ── */
-    $list = ex_departed_list($conn, $search);
+    $list = ex_departed_list($conn, $search, $gender);
 ?>
     <div class="panel">
         <div class="panel-head">Resigned / Left Employees (Visa Cancellation Completed)</div>
         <div class="panel-body">
-            <form method="GET" style="display:flex;gap:10px;margin-bottom:14px;" class="fg">
+            <form method="GET" style="display:flex;gap:10px;margin-bottom:14px;align-items:center;" class="fg">
                 <input type="text" name="search" value="<?php echo ex_h($search); ?>" placeholder="Search User No / Name">
+                <select name="gender" style="padding:9px 11px;border:1px solid var(--gray-200);border-radius:7px;font-size:13px;">
+                    <option value="">All Genders</option>
+                    <option value="Male"    <?php echo $gender === 'Male'    ? 'selected' : ''; ?>>Male</option>
+                    <option value="Female"  <?php echo $gender === 'Female'  ? 'selected' : ''; ?>>Female</option>
+                    <option value="Shemale" <?php echo $gender === 'Shemale' ? 'selected' : ''; ?>>Shemale</option>
+                </select>
                 <button class="btn btn-primary" type="submit">&#128269; Search</button>
-                <?php if ($search !== ''): ?><a class="btn btn-gray" href="ex_employee_records.php">Clear</a><?php endif; ?>
+                <?php if ($search !== '' || $gender !== ''): ?><a class="btn btn-gray" href="ex_employee_records.php">Clear</a><?php endif; ?>
             </form>
             <div class="table-wrap">
             <table>
