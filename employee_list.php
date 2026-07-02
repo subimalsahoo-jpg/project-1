@@ -63,6 +63,7 @@ $status_filter = $_GET['status'] ?? '';
 $dept_filter = $_GET['department'] ?? '';
 $desig_filter = $_GET['designation'] ?? '';
 $nation_filter = $_GET['nationality'] ?? '';
+$gender_filter = $_GET['gender'] ?? '';
 $is_excel = isset($_GET['export']) && $_GET['export'] === 'excel';
 
 $where = ["1=1"];
@@ -122,6 +123,11 @@ if ($nation_filter !== '' && isset($employee_columns['nationality'])) {
     $where[] = "nationality='$safe_nation'";
 }
 
+if ($gender_filter !== '' && isset($employee_columns['gender'])) {
+    $safe_gender = esc($conn, $gender_filter);
+    $where[] = "gender='$safe_gender'";
+}
+
 $where_sql = implode(' AND ', $where);
 $result = mysqli_query($conn, "
     SELECT *
@@ -137,6 +143,7 @@ if ($user_no !== '') { $safe_uno2 = esc($conn, $user_no); $where_no_status[] = "
 if ($dept_filter !== '' && isset($employee_columns['department'])) { $safe_dept2 = esc($conn, $dept_filter); $where_no_status[] = "department='$safe_dept2'"; }
 if ($desig_filter !== '' && isset($employee_columns['designation'])) { $safe_desig2 = esc($conn, $desig_filter); $where_no_status[] = "designation='$safe_desig2'"; }
 if ($nation_filter !== '' && isset($employee_columns['nationality'])) { $safe_nation2 = esc($conn, $nation_filter); $where_no_status[] = "nationality='$safe_nation2'"; }
+if ($gender_filter !== '' && isset($employee_columns['gender'])) { $safe_gender2 = esc($conn, $gender_filter); $where_no_status[] = "gender='$safe_gender2'"; }
 $where_no_status_sql = implode(' AND ', $where_no_status);
 
 $status_count_select = [
@@ -197,6 +204,11 @@ $nationalities = [];
 if (isset($employee_columns['nationality'])) {
     $dr = mysqli_query($conn, "SELECT DISTINCT nationality FROM employees WHERE nationality IS NOT NULL AND nationality!='' ORDER BY nationality ASC");
     if ($dr) while ($row = mysqli_fetch_row($dr)) $nationalities[] = $row[0];
+}
+$genders = [];
+if (isset($employee_columns['gender'])) {
+    $gr = mysqli_query($conn, "SELECT DISTINCT gender FROM employees WHERE gender IS NOT NULL AND gender!='' ORDER BY gender ASC");
+    if ($gr) while ($row = mysqli_fetch_row($gr)) $genders[] = $row[0];
 }
 
 $today = date('Y-m-d');
@@ -708,6 +720,17 @@ table{width:100%;}
         </select>
         <?php else: ?>
         <input type="hidden" name="nationality" value="">
+        <?php endif; ?>
+        <?php if (!empty($genders)): ?>
+        <label>Gender:</label>
+        <select name="gender">
+            <option value="">All</option>
+            <?php foreach ($genders as $g): ?>
+            <option value="<?php echo h($g); ?>" <?php echo $gender_filter === $g ? 'selected' : ''; ?>><?php echo h($g); ?></option>
+            <?php endforeach; ?>
+        </select>
+        <?php else: ?>
+        <input type="hidden" name="gender" value="">
         <?php endif; ?>
         <button type="submit" class="btn" style="margin:0;">&#128269; Search</button>
         <a href="employee_list.php" class="reset-link">&#10006; Reset</a>
