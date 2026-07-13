@@ -33,32 +33,25 @@ if ($nationality_filter != "") {
     $vacation_where .= " AND nationality = '$nationality_safe'";
 }
 if ($status_filter != "") {
-    // Use date-based logic for status filtering (existing data may have old status values)
-    switch ($status_filter) {
-        case 'Pending Approval':
-            $vacation_where .= " AND from_date > '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Approved','Ticket Processing','Travelled')";
-            break;
-        case 'Approved':
-            $vacation_where .= " AND (vacation_status = 'Approved' OR (from_date > '$today' AND vacation_status = 'Approved'))";
-            break;
-        case 'Ticket Processing':
-            $vacation_where .= " AND vacation_status = 'Ticket Processing'";
-            break;
-        case 'Travelled':
-            $vacation_where .= " AND vacation_status = 'Travelled'";
-            break;
-        case 'On Vacation':
-            $vacation_where .= " AND from_date <= '$today' AND to_date >= '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
-            break;
-        case 'Returned':
-            $vacation_where .= " AND ((return_date IS NOT NULL AND return_date != '' AND return_date != '0000-00-00' AND return_date <= '$today') OR vacation_status = 'Returned')";
-            break;
-        case 'Over Stayed':
-            $vacation_where .= " AND to_date < '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00') AND (actual_return IS NULL OR actual_return='' OR actual_return='0000-00-00') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
-            break;
-        case 'Cancelled':
-            $vacation_where .= " AND vacation_status = 'Cancelled'";
-            break;
+    // Only filter by stored vacation_status for statuses that are actually stored in DB
+    // For computed statuses (On Vacation, Over Stayed, etc.) use date-based logic
+    $status_lower = strtolower($status_filter);
+    if (in_array($status_lower, ['cancelled', 'ticket processing', 'travelled'])) {
+        $vacation_where .= " AND LOWER(vacation_status) = '$status_lower'";
+    } elseif ($status_filter === 'On Vacation') {
+        $vacation_where .= " AND from_date <= '$today' AND to_date >= '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+    } elseif ($status_filter === 'Returned') {
+        $vacation_where .= " AND ((return_date IS NOT NULL AND return_date != '' AND return_date != '0000-00-00' AND return_date <= '$today') OR LOWER(vacation_status) = 'returned')";
+    } elseif ($status_filter === 'Over Stayed') {
+        $vacation_where .= " AND to_date < '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00') AND (actual_return IS NULL OR actual_return='' OR actual_return='0000-00-00') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+    } elseif ($status_filter === 'Pending Approval') {
+        $vacation_where .= " AND from_date > '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+    } elseif ($status_filter === 'Approved') {
+        // Show upcoming vacations (not yet started, not cancelled)
+        $vacation_where .= " AND from_date > '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled')";
+    } else {
+        // Fallback - try stored value
+        $vacation_where .= " AND vacation_status = '$status_safe'";
     }
 }
 
@@ -126,9 +119,9 @@ $going_this_month_query = mysqli_query($conn, "
 ");
 $going_this_month = (int)(mysqli_fetch_assoc($going_this_month_query)['total'] ?? 0);
 
-// Now On Vacation
+// Now On Vacation (count records, not distinct - same as dashboard)
 $now_on_vacation_query = mysqli_query($conn, "
-    SELECT COUNT(DISTINCT user_no) AS total FROM vacations
+    SELECT COUNT(*) AS total FROM vacations
     WHERE from_date <= '$today' AND to_date >= '$today'
       AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $count_where_base
 ");
@@ -172,25 +165,44 @@ $last_month_returned = (int)(mysqli_fetch_assoc($last_month_returned_query)['tot
 
 /* ===== TAB DATA QUERIES ===== */
 
-// TAB 1: This Month On Vacation
+// Base where clause (without status filter) for Tab 1 and Tab 2
+$tab_where_base = "";
+if ($search != "") {
+    $tab_where_base .= " AND (user_no LIKE '%$search_safe%' OR employee_name LIKE '%$search_safe%')";
+}
+if ($dept_filter != "") {
+    $tab_where_base .= " AND department = '$dept_safe'";
+}
+if ($nationality_filter != "") {
+    $tab_where_base .= " AND nationality = '$nationality_safe'";
+}
+$tab_where_base .= "
+    AND (reason IS NULL OR (
+        reason NOT LIKE '%Compensatory Off%'
+        AND reason NOT LIKE '%swapped with%'
+        AND reason NOT LIKE '%day swap%'
+        AND reason NOT LIKE '%compensatory work day%'
+    ))";
+
+// TAB 1: This Month On Vacation (no status filter — shows all active this month)
 $tab1_query = mysqli_query($conn, "
     SELECT *, DATEDIFF(to_date, from_date) + 1 AS vacation_days
     FROM vacations
     WHERE from_date <= '$current_month_end'
       AND to_date >= '$current_month_start'
       AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
-      $vacation_where
+      $tab_where_base
     ORDER BY from_date DESC
 ");
 
-// TAB 2: Last Month Returned
+// TAB 2: Last Month Returned (no status filter)
 $tab2_query = mysqli_query($conn, "
     SELECT *, DATEDIFF(to_date, from_date) + 1 AS vacation_days
     FROM vacations
     WHERE (return_date BETWEEN '$last_month_start' AND '$last_month_end'
        OR actual_return BETWEEN '$last_month_start' AND '$last_month_end')
       AND COALESCE(vacation_status,'') != 'Cancelled'
-      $vacation_where
+      $tab_where_base
     ORDER BY return_date DESC
 ");
 
@@ -507,14 +519,14 @@ tbody tr{cursor:pointer;transition:background 0.1s;}
             <div class="card-label">Total Vacation</div>
         </div>
     </div>
-    <div class="summary-card" onclick="filterByStatus('Pending Approval')" id="card-pending">
+    <div class="summary-card" onclick="switchTab(2)" id="card-pending">
         <div class="card-icon orange"><i class="fas fa-clock"></i></div>
         <div class="card-info">
             <div class="card-num"><?php echo $pending_approval; ?></div>
             <div class="card-label">Pending Approval</div>
         </div>
     </div>
-    <div class="summary-card" onclick="filterByStatus('Approved')" id="card-approved">
+    <div class="summary-card" onclick="switchTab(2)" id="card-approved">
         <div class="card-icon green"><i class="fas fa-check-circle"></i></div>
         <div class="card-info">
             <div class="card-num"><?php echo $approved_today; ?></div>
