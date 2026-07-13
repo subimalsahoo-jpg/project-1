@@ -89,8 +89,8 @@ $count_where_base .= "
         AND reason NOT LIKE '%compensatory work day%'
     ))";
 
-// Total Vacation Records
-$total_query = mysqli_query($conn, "SELECT COUNT(*) AS total FROM vacations WHERE 1=1 $count_where_base");
+// Total Vacation Records (unique, no duplicates)
+$total_query = mysqli_query($conn, "SELECT COUNT(*) AS total FROM (SELECT MIN(id) FROM vacations WHERE 1=1 $count_where_base GROUP BY user_no, from_date, to_date) t");
 $total_vacation = (int)(mysqli_fetch_assoc($total_query)['total'] ?? 0);
 
 // Pending Approval (future vacations not yet started)
@@ -119,9 +119,9 @@ $going_this_month_query = mysqli_query($conn, "
 ");
 $going_this_month = (int)(mysqli_fetch_assoc($going_this_month_query)['total'] ?? 0);
 
-// Now On Vacation (count records, not distinct - same as dashboard)
+// Now On Vacation (unique employees currently on vacation)
 $now_on_vacation_query = mysqli_query($conn, "
-    SELECT COUNT(*) AS total FROM vacations
+    SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE from_date <= '$today' AND to_date >= '$today'
       AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $count_where_base
 ");
@@ -588,25 +588,6 @@ tbody tr{cursor:pointer;transition:background 0.1s;}
             <?php while($d = mysqli_fetch_assoc($dept_list)): ?>
             <option value="<?php echo htmlspecialchars($d['department']); ?>" <?php echo $dept_filter === $d['department'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($d['department']); ?></option>
             <?php endwhile; ?>
-        </select>
-        <label>Nationality</label>
-        <select name="nationality">
-            <option value="">All Nationality</option>
-            <?php while($n = mysqli_fetch_assoc($nat_list)): ?>
-            <option value="<?php echo htmlspecialchars($n['nationality']); ?>" <?php echo $nationality_filter === $n['nationality'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($n['nationality']); ?></option>
-            <?php endwhile; ?>
-        </select>
-        <label>Status</label>
-        <select name="status">
-            <option value="">All Status</option>
-            <option value="Pending Approval" <?php echo $status_filter==='Pending Approval'?'selected':''; ?>>Pending Approval</option>
-            <option value="Approved" <?php echo $status_filter==='Approved'?'selected':''; ?>>Approved</option>
-            <option value="Ticket Processing" <?php echo $status_filter==='Ticket Processing'?'selected':''; ?>>Ticket Processing</option>
-            <option value="Travelled" <?php echo $status_filter==='Travelled'?'selected':''; ?>>Travelled</option>
-            <option value="On Vacation" <?php echo $status_filter==='On Vacation'?'selected':''; ?>>On Vacation</option>
-            <option value="Returned" <?php echo $status_filter==='Returned'?'selected':''; ?>>Returned</option>
-            <option value="Over Stayed" <?php echo $status_filter==='Over Stayed'?'selected':''; ?>>Over Stayed</option>
-            <option value="Cancelled" <?php echo $status_filter==='Cancelled'?'selected':''; ?>>Cancelled</option>
         </select>
         <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
         <a href="vacation_details.php" class="btn btn-outline btn-sm"><i class="fas fa-times"></i> Reset</a>
