@@ -33,7 +33,33 @@ if ($nationality_filter != "") {
     $vacation_where .= " AND nationality = '$nationality_safe'";
 }
 if ($status_filter != "") {
-    $vacation_where .= " AND vacation_status = '$status_safe'";
+    // Use date-based logic for status filtering (existing data may have old status values)
+    switch ($status_filter) {
+        case 'Pending Approval':
+            $vacation_where .= " AND from_date > '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Approved','Ticket Processing','Travelled')";
+            break;
+        case 'Approved':
+            $vacation_where .= " AND (vacation_status = 'Approved' OR (from_date > '$today' AND vacation_status = 'Approved'))";
+            break;
+        case 'Ticket Processing':
+            $vacation_where .= " AND vacation_status = 'Ticket Processing'";
+            break;
+        case 'Travelled':
+            $vacation_where .= " AND vacation_status = 'Travelled'";
+            break;
+        case 'On Vacation':
+            $vacation_where .= " AND from_date <= '$today' AND to_date >= '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+            break;
+        case 'Returned':
+            $vacation_where .= " AND ((return_date IS NOT NULL AND return_date != '' AND return_date != '0000-00-00' AND return_date <= '$today') OR vacation_status = 'Returned')";
+            break;
+        case 'Over Stayed':
+            $vacation_where .= " AND to_date < '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00') AND (actual_return IS NULL OR actual_return='' OR actual_return='0000-00-00') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+            break;
+        case 'Cancelled':
+            $vacation_where .= " AND vacation_status = 'Cancelled'";
+            break;
+    }
 }
 
 $vacation_where .= "
@@ -51,14 +77,35 @@ $nat_list = mysqli_query($conn, "SELECT DISTINCT nationality FROM vacations WHER
 
 /* ===== SUMMARY COUNTS ===== */
 
+// Summary counts use a base filter WITHOUT status filter (to show true totals on cards)
+$count_where_base = "";
+if ($search != "") {
+    $count_where_base .= " AND (user_no LIKE '%$search_safe%' OR employee_name LIKE '%$search_safe%')";
+}
+if ($dept_filter != "") {
+    $count_where_base .= " AND department = '$dept_safe'";
+}
+if ($nationality_filter != "") {
+    $count_where_base .= " AND nationality = '$nationality_safe'";
+}
+$count_where_base .= "
+    AND (reason IS NULL OR (
+        reason NOT LIKE '%Compensatory Off%'
+        AND reason NOT LIKE '%swapped with%'
+        AND reason NOT LIKE '%day swap%'
+        AND reason NOT LIKE '%compensatory work day%'
+    ))";
+
 // Total Vacation Records
-$total_query = mysqli_query($conn, "SELECT COUNT(*) AS total FROM vacations WHERE 1=1 $vacation_where");
+$total_query = mysqli_query($conn, "SELECT COUNT(*) AS total FROM vacations WHERE 1=1 $count_where_base");
 $total_vacation = (int)(mysqli_fetch_assoc($total_query)['total'] ?? 0);
 
-// Pending Approval
+// Pending Approval (future vacations not yet started)
 $pending_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
-    WHERE vacation_status = 'Pending Approval' $vacation_where
+    WHERE from_date > '$today'
+      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
+      $count_where_base
 ");
 $pending_approval = (int)(mysqli_fetch_assoc($pending_query)['total'] ?? 0);
 
@@ -66,23 +113,24 @@ $pending_approval = (int)(mysqli_fetch_assoc($pending_query)['total'] ?? 0);
 $approved_today_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE vacation_status = 'Approved'
-      AND DATE(created_at) = '$today' $vacation_where
+      AND DATE(created_at) = '$today' $count_where_base
 ");
 $approved_today = (int)(mysqli_fetch_assoc($approved_today_query)['total'] ?? 0);
 
-// Going Today (from_date = today)
-$going_today_query = mysqli_query($conn, "
+// Going This Month (from_date falls in this month)
+$going_this_month_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
-    WHERE from_date = '$today'
-      AND COALESCE(vacation_status,'') != 'Cancelled' $vacation_where
+    WHERE from_date BETWEEN '$current_month_start' AND '$current_month_end'
+      AND COALESCE(vacation_status,'') != 'Cancelled'
+      $count_where_base
 ");
-$going_today = (int)(mysqli_fetch_assoc($going_today_query)['total'] ?? 0);
+$going_this_month = (int)(mysqli_fetch_assoc($going_this_month_query)['total'] ?? 0);
 
 // Now On Vacation
 $now_on_vacation_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE from_date <= '$today' AND to_date >= '$today'
-      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $vacation_where
+      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $count_where_base
 ");
 $now_on_vacation = (int)(mysqli_fetch_assoc($now_on_vacation_query)['total'] ?? 0);
 
@@ -90,7 +138,7 @@ $now_on_vacation = (int)(mysqli_fetch_assoc($now_on_vacation_query)['total'] ?? 
 $returning_today_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE to_date = '$today'
-      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $vacation_where
+      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $count_where_base
 ");
 $returning_today = (int)(mysqli_fetch_assoc($returning_today_query)['total'] ?? 0);
 
@@ -100,7 +148,7 @@ $overdue_query = mysqli_query($conn, "
     WHERE to_date < '$today'
       AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00')
       AND (actual_return IS NULL OR actual_return='' OR actual_return='0000-00-00')
-      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $vacation_where
+      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $count_where_base
 ");
 $overdue_return = (int)(mysqli_fetch_assoc($overdue_query)['total'] ?? 0);
 
@@ -108,7 +156,7 @@ $overdue_return = (int)(mysqli_fetch_assoc($overdue_query)['total'] ?? 0);
 $this_month_total_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE from_date <= '$current_month_end' AND to_date >= '$current_month_start'
-      AND COALESCE(vacation_status,'') != 'Cancelled' $vacation_where
+      AND COALESCE(vacation_status,'') != 'Cancelled' $count_where_base
 ");
 $this_month_total = (int)(mysqli_fetch_assoc($this_month_total_query)['total'] ?? 0);
 
@@ -117,7 +165,7 @@ $last_month_returned_query = mysqli_query($conn, "
     SELECT COUNT(DISTINCT user_no) AS total FROM vacations
     WHERE (return_date BETWEEN '$last_month_start' AND '$last_month_end'
        OR actual_return BETWEEN '$last_month_start' AND '$last_month_end')
-      AND COALESCE(vacation_status,'') != 'Cancelled' $vacation_where
+      AND COALESCE(vacation_status,'') != 'Cancelled' $count_where_base
 ");
 $last_month_returned = (int)(mysqli_fetch_assoc($last_month_returned_query)['total'] ?? 0);
 
@@ -476,8 +524,8 @@ tbody tr{cursor:pointer;transition:background 0.1s;}
     <div class="summary-card" onclick="switchTab(0)" id="card-going">
         <div class="card-icon amber"><i class="fas fa-plane-departure"></i></div>
         <div class="card-info">
-            <div class="card-num"><?php echo $going_today; ?></div>
-            <div class="card-label">Going Today</div>
+            <div class="card-num"><?php echo $going_this_month; ?></div>
+            <div class="card-label">Going This Month</div>
         </div>
     </div>
     <div class="summary-card" onclick="switchTab(0)" id="card-on-vacation">
