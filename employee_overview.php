@@ -240,7 +240,16 @@ if ($canEditEmployee && isset($_POST['save_visarenewal'])) {
         mysqli_query($conn, "INSERT INTO employee_visa_renewals
             (user_no, employee_id, renew_from, renew_to, cost, remarks, created_by)
             VALUES ('$u','$ei'," . ($rf !== '' ? "'$rf'" : "NULL") . "," . ($rt !== '' ? "'$rt'" : "NULL") . ",'$co','$rk','$cb')");
-        $message = "<div class='msg success'><span>✓</span> Visa renewal added.</div>";
+
+        // Also update employees table so Visa Expire report reflects the renewal
+        if ($rt !== '') {
+            mysqli_query($conn, "UPDATE employees SET visa_expiry_date = '$rt' WHERE user_no = '$u'");
+        }
+        if ($rf !== '') {
+            mysqli_query($conn, "UPDATE employees SET visa_issuing_date = '$rf' WHERE user_no = '$u'");
+        }
+
+        $message = "<div class='msg success'><span>✓</span> Visa renewal added and expiry date updated.</div>";
     } else {
         $message = "<div class='msg error'><span>!</span> Please provide the renewal dates.</div>";
     }
