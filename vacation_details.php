@@ -25,7 +25,7 @@ $base_where .= " AND (reason IS NULL OR (reason NOT LIKE '%Compensatory Off%' AN
 // COUNTS - same logic as dashboard (uses return_date check, NOT to_date)
 $now_on_vacation = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE from_date <= '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > '$today') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $base_where"))['total'] ?? 0);
 $going_this_month = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE from_date BETWEEN '$current_month_start' AND '$current_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled') $base_where"))['total'] ?? 0);
-$returning_today = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE to_date = '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $base_where"))['total'] ?? 0);
+$returning_this_month = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE to_date BETWEEN '$current_month_start' AND '$current_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $base_where"))['total'] ?? 0);
 $overdue_return = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE to_date < '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $base_where"))['total'] ?? 0);
 $this_month_total = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE from_date <= '$current_month_end' AND to_date >= '$current_month_start' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned') $base_where"))['total'] ?? 0);
 $last_month_returned = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT user_no) AS total FROM vacations WHERE return_date BETWEEN '$last_month_start' AND '$last_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled') $base_where"))['total'] ?? 0);
@@ -41,9 +41,9 @@ switch ($view) {
         $view_title = "Going This Month ($current_month_title)";
         $view_where = "from_date BETWEEN '$current_month_start' AND '$current_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled')";
         break;
-    case 'returning_today':
-        $view_title = "Returning Today";
-        $view_where = "to_date = '$today' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+    case 'returning_this_month':
+        $view_title = "Returning This Month ($current_month_title)";
+        $view_where = "to_date BETWEEN '$current_month_start' AND '$current_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
         break;
     case 'overdue':
         $view_title = "Overdue / Overstay";
@@ -51,7 +51,7 @@ switch ($view) {
         break;
     default:
         $view_title = "Active This Month ($current_month_title)";
-        $view_where = "from_date <= '$current_month_end' AND to_date >= '$current_month_start' AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
+        $view_where = "from_date <= '$current_month_end' AND to_date >= '$current_month_start' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > '$today') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
         break;
 }
 
@@ -92,7 +92,7 @@ function display_vacation_date($date) {
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f0f2f5; color: #1a1a2e; }
-        .main-content { margin-left: 250px; padding: 30px; }
+        .main-content { padding: 30px; }
         .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .page-header h1 { font-size: 24px; font-weight: 700; color: #1a1a2e; }
         .page-header .date-display { font-size: 14px; color: #6b7280; margin-top: 4px; }
@@ -206,10 +206,10 @@ function display_vacation_date($date) {
             <div class="card-label">Going This Month</div>
         </a>
 
-        <a href="?view=returning_today<?= $search ? '&search='.urlencode($search) : '' ?><?= $dept_filter ? '&department='.urlencode($dept_filter) : '' ?>" class="summary-card<?= $view === 'returning_today' ? ' active' : '' ?>">
+        <a href="?view=returning_this_month<?= $search ? '&search='.urlencode($search) : '' ?><?= $dept_filter ? '&department='.urlencode($dept_filter) : '' ?>" class="summary-card<?= $view === 'returning_this_month' ? ' active' : '' ?>">
             <div class="card-icon purple"><i class="fas fa-plane-arrival"></i></div>
-            <div class="card-number"><?= $returning_today ?></div>
-            <div class="card-label">Returning Today</div>
+            <div class="card-number"><?= $returning_this_month ?></div>
+            <div class="card-label">Returning This Month</div>
         </a>
         <a href="?view=overdue<?= $search ? '&search='.urlencode($search) : '' ?><?= $dept_filter ? '&department='.urlencode($dept_filter) : '' ?>" class="summary-card<?= $view === 'overdue' ? ' active' : '' ?>">
             <div class="card-icon red"><i class="fas fa-exclamation-triangle"></i></div>
