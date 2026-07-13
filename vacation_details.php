@@ -185,33 +185,46 @@ $tab_where_base .= "
     ))";
 
 // TAB 1: This Month On Vacation (no status filter — shows all active this month)
+// Group by user_no + from_date + to_date to avoid duplicate rows
 $tab1_query = mysqli_query($conn, "
-    SELECT *, DATEDIFF(to_date, from_date) + 1 AS vacation_days
-    FROM vacations
-    WHERE from_date <= '$current_month_end'
-      AND to_date >= '$current_month_start'
-      AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
-      $tab_where_base
-    ORDER BY from_date DESC
+    SELECT v.*, DATEDIFF(v.to_date, v.from_date) + 1 AS vacation_days
+    FROM vacations v
+    INNER JOIN (
+        SELECT MIN(id) AS id FROM vacations
+        WHERE from_date <= '$current_month_end'
+          AND to_date >= '$current_month_start'
+          AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')
+          $tab_where_base
+        GROUP BY user_no, from_date, to_date
+    ) dup ON v.id = dup.id
+    ORDER BY v.from_date DESC
 ");
 
 // TAB 2: Last Month Returned (no status filter)
 $tab2_query = mysqli_query($conn, "
-    SELECT *, DATEDIFF(to_date, from_date) + 1 AS vacation_days
-    FROM vacations
-    WHERE (return_date BETWEEN '$last_month_start' AND '$last_month_end'
-       OR actual_return BETWEEN '$last_month_start' AND '$last_month_end')
-      AND COALESCE(vacation_status,'') != 'Cancelled'
-      $tab_where_base
-    ORDER BY return_date DESC
+    SELECT v.*, DATEDIFF(v.to_date, v.from_date) + 1 AS vacation_days
+    FROM vacations v
+    INNER JOIN (
+        SELECT MIN(id) AS id FROM vacations
+        WHERE (return_date BETWEEN '$last_month_start' AND '$last_month_end'
+           OR actual_return BETWEEN '$last_month_start' AND '$last_month_end')
+          AND COALESCE(vacation_status,'') != 'Cancelled'
+          $tab_where_base
+        GROUP BY user_no, from_date, to_date
+    ) dup ON v.id = dup.id
+    ORDER BY v.return_date DESC
 ");
 
-// TAB 3: All Vacation Records
+// TAB 3: All Vacation Records (no duplicates)
 $tab3_query = mysqli_query($conn, "
-    SELECT *, DATEDIFF(to_date, from_date) + 1 AS vacation_days
-    FROM vacations
-    WHERE 1=1 $vacation_where
-    ORDER BY from_date DESC
+    SELECT v.*, DATEDIFF(v.to_date, v.from_date) + 1 AS vacation_days
+    FROM vacations v
+    INNER JOIN (
+        SELECT MIN(id) AS id FROM vacations
+        WHERE 1=1 $vacation_where
+        GROUP BY user_no, from_date, to_date
+    ) dup ON v.id = dup.id
+    ORDER BY v.from_date DESC
 ");
 
 function display_vacation_date($date) {
