@@ -49,6 +49,14 @@ switch ($view) {
         $view_title = "Overdue / Overstay";
         $view_where = "to_date < '$today' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
         break;
+    case 'last_month_returned':
+        $view_title = "Last Month Returned ($last_month_title)";
+        $view_where = "return_date BETWEEN '$last_month_start' AND '$last_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled')";
+        break;
+    case 'all_records':
+        $view_title = "All Records";
+        $view_where = "1=1";
+        break;
     default:
         $view_title = "Active This Month ($current_month_title)";
         $view_where = "from_date <= '$current_month_end' AND to_date >= '$current_month_start' AND (return_date IS NULL OR return_date='' OR return_date='0000-00-00' OR return_date > '$today') AND COALESCE(vacation_status,'') NOT IN ('Cancelled','Returned')";
@@ -59,18 +67,6 @@ switch ($view) {
 $tab1_sql = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days
 FROM vacations v
 INNER JOIN (SELECT MIN(id) AS id FROM vacations WHERE $view_where $base_where GROUP BY user_no, from_date, to_date) dup ON v.id = dup.id
-ORDER BY v.from_date DESC";
-
-$tab2_where = "return_date BETWEEN '$last_month_start' AND '$last_month_end' AND COALESCE(vacation_status,'') NOT IN ('Cancelled')";
-$tab2_query = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days
-FROM vacations v
-INNER JOIN (SELECT MIN(id) AS id FROM vacations WHERE $tab2_where $base_where GROUP BY user_no, from_date, to_date) dup ON v.id = dup.id
-ORDER BY v.from_date DESC";
-
-$tab3_where = "1=1";
-$tab3_query = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days
-FROM vacations v
-INNER JOIN (SELECT MIN(id) AS id FROM vacations WHERE $tab3_where $base_where GROUP BY user_no, from_date, to_date) dup ON v.id = dup.id
 ORDER BY v.from_date DESC";
 
 $dept_list = mysqli_query($conn, "SELECT DISTINCT department FROM vacations WHERE department != '' ORDER BY department");
@@ -105,7 +101,7 @@ function display_vacation_date($date) {
 
 
         /* Summary Cards */
-        .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 25px; }
         .summary-card { background: #fff; border-radius: 12px; padding: 20px; text-decoration: none; color: inherit; border: 2px solid transparent; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .summary-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .summary-card.active { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
@@ -114,6 +110,8 @@ function display_vacation_date($date) {
         .card-icon.amber { background: #fef3c7; color: #d97706; }
         .card-icon.purple { background: #ede9fe; color: #7c3aed; }
         .card-icon.red { background: #fee2e2; color: #dc2626; }
+        .card-icon.green { background: #dcfce7; color: #059669; }
+        .card-icon.blue { background: #dbeafe; color: #2563eb; }
         .card-number { font-size: 28px; font-weight: 700; color: #1a1a2e; }
         .card-label { font-size: 13px; color: #6b7280; margin-top: 4px; }
 
@@ -128,12 +126,7 @@ function display_vacation_date($date) {
 
         /* Tabs */
         .tabs-container { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
-        .tabs-header { display: flex; border-bottom: 1px solid #e5e7eb; padding: 0 20px; }
-        .tab-btn { padding: 14px 20px; font-size: 14px; font-weight: 500; color: #6b7280; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
-        .tab-btn:hover { color: #1a1a2e; }
-        .tab-content { display: none; padding: 20px; }
-        .tab-content.active { display: block; }
+        .tab-content { display: block; padding: 20px; }
 
         /* Table */
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -216,6 +209,16 @@ function display_vacation_date($date) {
             <div class="card-number"><?= $overdue_return ?></div>
             <div class="card-label">Overdue / Overstay</div>
         </a>
+        <a href="?view=last_month_returned<?= $search ? '&search='.urlencode($search) : '' ?><?= $dept_filter ? '&department='.urlencode($dept_filter) : '' ?>" class="summary-card<?= $view === 'last_month_returned' ? ' active' : '' ?>">
+            <div class="card-icon green"><i class="fas fa-calendar-check"></i></div>
+            <div class="card-number"><?= $last_month_returned ?></div>
+            <div class="card-label">Last Month Returned</div>
+        </a>
+        <a href="?view=all_records<?= $search ? '&search='.urlencode($search) : '' ?><?= $dept_filter ? '&department='.urlencode($dept_filter) : '' ?>" class="summary-card<?= $view === 'all_records' ? ' active' : '' ?>">
+            <div class="card-icon blue"><i class="fas fa-list-alt"></i></div>
+            <div class="card-number"><?= $total_vacation ?></div>
+            <div class="card-label">All Records</div>
+        </a>
     </div>
 
     <!-- Filter Bar -->
@@ -232,16 +235,9 @@ function display_vacation_date($date) {
         <a href="vacation_details.php" class="reset-link"><i class="fas fa-times"></i> Reset</a>
     </form>
 
-    <!-- Tabs Container -->
+    <!-- Table Container -->
     <div class="tabs-container">
-        <div class="tabs-header">
-            <button class="tab-btn active" onclick="switchTab(0)"><?= htmlspecialchars($view_title) ?></button>
-            <button class="tab-btn" onclick="switchTab(1)">Last Month Returned (<?= $last_month_title ?>)</button>
-            <button class="tab-btn" onclick="switchTab(2)">All Records (<?= $total_vacation ?>)</button>
-        </div>
-
-        <!-- Tab 1: Current View -->
-        <div class="tab-content active">
+        <div class="tab-content">
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -250,17 +246,12 @@ function display_vacation_date($date) {
                             <th>User No</th>
                             <th>Employee Name</th>
                             <th>Department</th>
-                            <th>Designation</th>
-                            <th>Nationality</th>
                             <th>Leave Type</th>
                             <th>From Date</th>
                             <th>To Date</th>
                             <th>Return Date</th>
                             <th>Days</th>
-                            <th>Leave Balance</th>
                             <th>Ticket</th>
-                            <th>Leave Salary</th>
-                            <th>Air Ticket (AED)</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
@@ -282,17 +273,12 @@ function display_vacation_date($date) {
                             <td><?= htmlspecialchars($row['user_no'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['employee_name'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['department'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['designation'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['nationality'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['leave_type'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['from_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['to_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['return_date'] ?? '') ?></td>
                             <td><?= $row['vacation_days'] ?? '' ?></td>
-                            <td><?= $row['leave_balance'] ?? 0 ?></td>
                             <td><?= htmlspecialchars($row['ticket_type'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_salary_status'] ?? '') ?></td>
-                            <td><?= number_format((float)($row['air_ticket_amount'] ?? 0), 2) ?></td>
                             <td><span class="status-badge <?= $status_class ?>"><?= $status_icon ?> <?= $status ?></span></td>
                             <td>
                                 <a href="edit_vacation.php?id=<?= $row['id'] ?>" class="action-btn edit"><i class="fas fa-edit"></i> Edit</a>
@@ -300,141 +286,7 @@ function display_vacation_date($date) {
                             </td>
                         </tr>
                     <?php endwhile; else: ?>
-                        <tr><td colspan="17" class="empty-state"><i class="fas fa-umbrella-beach"></i><p>No vacation records found.</p></td></tr>
-                    <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tab 2: Last Month Returned -->
-        <div class="tab-content">
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>SL</th>
-                            <th>User No</th>
-                            <th>Employee Name</th>
-                            <th>Department</th>
-                            <th>Designation</th>
-                            <th>Nationality</th>
-                            <th>Leave Type</th>
-                            <th>From Date</th>
-                            <th>To Date</th>
-                            <th>Return Date</th>
-                            <th>Days</th>
-                            <th>Leave Balance</th>
-                            <th>Ticket</th>
-                            <th>Leave Salary</th>
-                            <th>Air Ticket (AED)</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php
-                    $result2 = mysqli_query($conn, $tab2_query);
-                    $sl = 0;
-                    if ($result2 && mysqli_num_rows($result2) > 0):
-                        while ($row = mysqli_fetch_assoc($result2)):
-                            $sl++;
-                            $status = vacation_status_from_dates($row['from_date'], $row['to_date'], $row['return_date'] ?? '', $row['vacation_status'] ?? '');
-                            $status_class = vacation_status_class($status);
-                            $status_icon = vacation_status_icon($status);
-                    ?>
-
-                        <tr>
-                            <td><?= $sl ?></td>
-                            <td><?= htmlspecialchars($row['user_no'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['employee_name'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['department'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['designation'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['nationality'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_type'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['from_date'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['to_date'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['return_date'] ?? '') ?></td>
-                            <td><?= $row['vacation_days'] ?? '' ?></td>
-                            <td><?= $row['leave_balance'] ?? 0 ?></td>
-                            <td><?= htmlspecialchars($row['ticket_type'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_salary_status'] ?? '') ?></td>
-                            <td><?= number_format((float)($row['air_ticket_amount'] ?? 0), 2) ?></td>
-                            <td><span class="status-badge <?= $status_class ?>"><?= $status_icon ?> <?= $status ?></span></td>
-                            <td>
-                                <a href="edit_vacation.php?id=<?= $row['id'] ?>" class="action-btn edit"><i class="fas fa-edit"></i> Edit</a>
-                                <a href="delete_vacation.php?id=<?= $row['id'] ?>" class="action-btn delete" onclick="return confirm('Are you sure you want to delete this vacation record?')"><i class="fas fa-trash"></i> Delete</a>
-                            </td>
-                        </tr>
-                    <?php endwhile; else: ?>
-                        <tr><td colspan="17" class="empty-state"><i class="fas fa-umbrella-beach"></i><p>No vacation records found.</p></td></tr>
-                    <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tab 3: All Records -->
-        <div class="tab-content">
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>SL</th>
-                            <th>User No</th>
-                            <th>Employee Name</th>
-                            <th>Department</th>
-                            <th>Designation</th>
-                            <th>Nationality</th>
-                            <th>Leave Type</th>
-                            <th>From Date</th>
-                            <th>To Date</th>
-                            <th>Return Date</th>
-                            <th>Days</th>
-                            <th>Leave Balance</th>
-                            <th>Ticket</th>
-                            <th>Leave Salary</th>
-                            <th>Air Ticket (AED)</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php
-                    $result3 = mysqli_query($conn, $tab3_query);
-                    $sl = 0;
-                    if ($result3 && mysqli_num_rows($result3) > 0):
-                        while ($row = mysqli_fetch_assoc($result3)):
-                            $sl++;
-                            $status = vacation_status_from_dates($row['from_date'], $row['to_date'], $row['return_date'] ?? '', $row['vacation_status'] ?? '');
-                            $status_class = vacation_status_class($status);
-                            $status_icon = vacation_status_icon($status);
-                    ?>
-
-                        <tr>
-                            <td><?= $sl ?></td>
-                            <td><?= htmlspecialchars($row['user_no'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['employee_name'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['department'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['designation'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['nationality'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_type'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['from_date'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['to_date'] ?? '') ?></td>
-                            <td><?= display_vacation_date($row['return_date'] ?? '') ?></td>
-                            <td><?= $row['vacation_days'] ?? '' ?></td>
-                            <td><?= $row['leave_balance'] ?? 0 ?></td>
-                            <td><?= htmlspecialchars($row['ticket_type'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_salary_status'] ?? '') ?></td>
-                            <td><?= number_format((float)($row['air_ticket_amount'] ?? 0), 2) ?></td>
-                            <td><span class="status-badge <?= $status_class ?>"><?= $status_icon ?> <?= $status ?></span></td>
-                            <td>
-                                <a href="edit_vacation.php?id=<?= $row['id'] ?>" class="action-btn edit"><i class="fas fa-edit"></i> Edit</a>
-                                <a href="delete_vacation.php?id=<?= $row['id'] ?>" class="action-btn delete" onclick="return confirm('Are you sure you want to delete this vacation record?')"><i class="fas fa-trash"></i> Delete</a>
-                            </td>
-                        </tr>
-                    <?php endwhile; else: ?>
-                        <tr><td colspan="17" class="empty-state"><i class="fas fa-umbrella-beach"></i><p>No vacation records found.</p></td></tr>
+                        <tr><td colspan="12" class="empty-state"><i class="fas fa-umbrella-beach"></i><p>No vacation records found.</p></td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
@@ -443,17 +295,5 @@ function display_vacation_date($date) {
     </div>
 </div>
 
-<script>
-function switchTab(idx) {
-    var btns = document.querySelectorAll('.tab-btn');
-    var contents = document.querySelectorAll('.tab-content');
-    for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.remove('active');
-        contents[i].classList.remove('active');
-    }
-    btns[idx].classList.add('active');
-    contents[idx].classList.add('active');
-}
-</script>
 </body>
 </html>
