@@ -66,7 +66,7 @@ switch ($view) {
 
 $tab1_sql = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days,
     COALESCE(e.department, v.department, '') AS emp_department,
-    COALESCE(e.designation, e.position, v.designation, '') AS emp_designation
+    COALESCE(e.designation, v.designation, '') AS emp_designation
 FROM vacations v
 LEFT JOIN employees e ON e.user_no = v.user_no
 INNER JOIN (SELECT MIN(id) AS id FROM vacations WHERE $view_where $base_where GROUP BY user_no, from_date, to_date) dup ON v.id = dup.id
