@@ -19,7 +19,7 @@ $dept_safe = mysqli_real_escape_string($conn, $dept_filter);
 
 $base_where = "";
 if ($search != "") $base_where .= " AND (user_no LIKE '%$search_safe%' OR employee_name LIKE '%$search_safe%')";
-if ($dept_filter != "") $base_where .= " AND department = '$dept_safe'";
+if ($dept_filter != "") $base_where .= " AND user_no IN (SELECT user_no FROM employees WHERE department = '$dept_safe')";
 $base_where .= " AND (reason IS NULL OR (reason NOT LIKE '%Compensatory Off%' AND reason NOT LIKE '%swapped with%' AND reason NOT LIKE '%day swap%' AND reason NOT LIKE '%compensatory work day%'))";
 
 // COUNTS - same logic as dashboard (uses return_date check, NOT to_date)
@@ -64,12 +64,15 @@ switch ($view) {
 }
 
 
-$tab1_sql = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days
+$tab1_sql = "SELECT v.*, DATEDIFF(v.to_date, v.from_date)+1 AS vacation_days,
+    COALESCE(e.department, v.department, '') AS emp_department,
+    COALESCE(e.designation, e.position, v.designation, '') AS emp_designation
 FROM vacations v
+LEFT JOIN employees e ON e.user_no = v.user_no
 INNER JOIN (SELECT MIN(id) AS id FROM vacations WHERE $view_where $base_where GROUP BY user_no, from_date, to_date) dup ON v.id = dup.id
 ORDER BY v.from_date DESC";
 
-$dept_list = mysqli_query($conn, "SELECT DISTINCT department FROM vacations WHERE department != '' ORDER BY department");
+$dept_list = mysqli_query($conn, "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department != '' ORDER BY department");
 
 function display_vacation_date($date) {
     if (empty($date) || $date === '0000-00-00' || $date === null) return '-';
@@ -272,8 +275,8 @@ function display_vacation_date($date) {
                             <td><?= $sl ?></td>
                             <td><?= htmlspecialchars($row['user_no'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['employee_name'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['department'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['designation'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($row['emp_department'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($row['emp_designation'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['from_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['to_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['return_date'] ?? '') ?></td>
