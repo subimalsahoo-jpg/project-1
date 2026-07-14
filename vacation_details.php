@@ -246,14 +246,14 @@ function display_vacation_date($date) {
                             <th>User No</th>
                             <th>Employee Name</th>
                             <th>Department</th>
-                            <th>Leave Type</th>
+                            <th>Designation</th>
                             <th>From Date</th>
                             <th>To Date</th>
                             <th>Return Date</th>
                             <th>Days</th>
                             <th>Ticket</th>
                             <th>Status</th>
-                            <th>Action</th>
+                            <?php if (hasPermission('vacation_manage')): ?><th>Action</th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -273,17 +273,19 @@ function display_vacation_date($date) {
                             <td><?= htmlspecialchars($row['user_no'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['employee_name'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['department'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($row['leave_type'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($row['designation'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['from_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['to_date'] ?? '') ?></td>
                             <td><?= display_vacation_date($row['return_date'] ?? '') ?></td>
                             <td><?= $row['vacation_days'] ?? '' ?></td>
                             <td><?= htmlspecialchars($row['ticket_type'] ?? '') ?></td>
                             <td><span class="status-badge <?= $status_class ?>"><?= $status_icon ?> <?= $status ?></span></td>
+                            <?php if (hasPermission('vacation_manage')): ?>
                             <td>
                                 <a href="edit_vacation.php?id=<?= $row['id'] ?>" class="action-btn edit"><i class="fas fa-edit"></i> Edit</a>
                                 <a href="delete_vacation.php?id=<?= $row['id'] ?>" class="action-btn delete" onclick="return confirm('Are you sure you want to delete this vacation record?')"><i class="fas fa-trash"></i> Delete</a>
                             </td>
+                            <?php endif; ?>
                         </tr>
                     <?php endwhile; else: ?>
                         <tr><td colspan="12" class="empty-state"><i class="fas fa-umbrella-beach"></i><p>No vacation records found.</p></td></tr>
